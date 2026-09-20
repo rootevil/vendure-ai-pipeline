@@ -8,3 +8,4 @@ evaluation-demo
 docs
 *.md
 package-lock.json
+.env.docker

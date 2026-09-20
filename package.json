@@ -16,7 +16,11 @@
     "test": "node --import tsx --test test/**/*.test.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "pipeline": "node --import tsx src/cli/index.ts"
+    "pipeline": "node --import tsx src/cli/index.ts",
+    "docker:start": "./scripts/start.sh",
+    "docker:stop": "./scripts/stop.sh",
+    "docker:check": "./scripts/check.sh",
+    "docker:cleanup": "./scripts/cleanup.sh"
   },
   "dependencies": {
     "zod": "^3.24.2"

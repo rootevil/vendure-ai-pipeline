@@ -1,0 +1,129 @@
+name: vendure-ai-pipeline
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+services:
+  postgres:
+    image: postgres:16.15-alpine
+    restart: 'no'
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pipeline}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pipeline_dev_only}
+      POSTGRES_DB: ${POSTGRES_DB:-pipeline}
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - pipeline_internal
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    cpus: 1.0
+    mem_limit: 512m
+    pids_limit: 256
+    stop_grace_period: 20s
+    logging: *default-logging
+
+  redis:
+    image: redis:7.4.2-alpine
+    restart: 'no'
+    command:
+      [
+        'redis-server',
+        '--save',
+        '',
+        '--appendonly',
+        'no',
+        '--maxmemory',
+        '128mb',
+        '--maxmemory-policy',
+        'allkeys-lru',
+      ]
+    volumes:
+      - redis_data:/data
+    networks:
+      - pipeline_internal
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+    cpus: 0.5
+    mem_limit: 256m
+    pids_limit: 128
+    stop_grace_period: 10s
+    logging: *default-logging
+
+  pipeline:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: vendure-ai-pipeline:local
+    restart: 'no'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - path: ../.env.docker
+        required: false
+    environment:
+      NODE_ENV: development
+      PIPELINE_ENV: nonprod
+      PIPELINE_MODE: ${PIPELINE_MODE:-acceptance}
+      PIPELINE_ARTIFACTS_DIR: /pipeline/artifacts
+      PIPELINE_WORKSPACE_DIR: /pipeline/workspace
+      PIPELINE_ALLOW_NETWORK: 'false'
+      PIPELINE_LOG_LEVEL: ${PIPELINE_LOG_LEVEL:-info}
+      PIPELINE_WRITE_ALLOWLIST: ${PIPELINE_WRITE_ALLOWLIST:-fixtures,src,app,evaluation-demo/app}
+      PIPELINE_MAX_IDENTICAL_RETRIES: ${PIPELINE_MAX_IDENTICAL_RETRIES:-3}
+      PIPELINE_MAX_TOTAL_ATTEMPTS: ${PIPELINE_MAX_TOTAL_ATTEMPTS:-5}
+      PIPELINE_HEALTH_REQUIRE_DEPS: 'true'
+      PIPELINE_KEEPALIVE_INTERVAL_MS: '15000'
+      PIPELINE_STACK_TIMEOUT_SECONDS: ${PIPELINE_STACK_TIMEOUT_SECONDS:-300}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://pipeline:pipeline_dev_only@postgres:5432/pipeline}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      PGHOST: postgres
+      PGPORT: '5432'
+      PGUSER: ${POSTGRES_USER:-pipeline}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-pipeline_dev_only}
+      PGDATABASE: ${POSTGRES_DB:-pipeline}
+    volumes:
+      - pipeline_artifacts:/pipeline/artifacts
+      - pipeline_workspace:/pipeline/workspace
+    networks:
+      - pipeline_internal
+    working_dir: /pipeline
+    command: ['node', '/app/scripts/docker/keep-alive.mjs']
+    healthcheck:
+      test: ['CMD', 'node', '/app/scripts/docker/healthcheck.mjs', '--full']
+      interval: 10s
+      timeout: 5s
+      retries: 8
+      start_period: 25s
+    cpus: 1.0
+    mem_limit: 1g
+    pids_limit: 512
+    stop_grace_period: 15s
+    logging: *default-logging
+
+networks:
+  pipeline_internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  pipeline_artifacts:
+  pipeline_workspace:
