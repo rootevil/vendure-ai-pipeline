@@ -92,10 +92,59 @@ function validateStep(step: ValidationStep, allowedTools: readonly AllowedTool[]
         errors.push(`validationSteps.${step.id} requires filesystem or mock in allowedTools`);
       }
       break;
+    case 'application_health':
+    case 'http_response':
+    case 'graphql_request':
+    case 'browser_playwright':
+      errors.push(...validateHttpUrl(step.url, `validationSteps.${step.id}.url`));
+      break;
+    case 'database_state':
+      if (step.driver === 'json_fixture') {
+        if (!step.fixturePath) {
+          errors.push(`validationSteps.${step.id} json_fixture requires fixturePath`);
+        } else {
+          errors.push(
+            ...validateRelativeSafePath(step.fixturePath, `validationSteps.${step.id}.fixturePath`),
+          );
+        }
+      }
+      if (step.driver === 'postgres') {
+        if (!step.connectionString) {
+          errors.push(`validationSteps.${step.id} postgres requires connectionString`);
+        } else if (/prod|production/i.test(step.connectionString)) {
+          errors.push(`validationSteps.${step.id} refuses production-looking connection strings`);
+        }
+      }
+      if (
+        step.expectEquals === undefined &&
+        step.expectRowCount === undefined &&
+        step.expectContains === undefined
+      ) {
+        errors.push(`validationSteps.${step.id} requires at least one database expectation`);
+      }
+      break;
     default: {
       const exhaustive: never = step;
       errors.push(`unsupported validation step: ${JSON.stringify(exhaustive)}`);
     }
+  }
+  return errors;
+}
+
+function validateHttpUrl(url: string, label: string): string[] {
+  const errors: string[] = [];
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    errors.push(`${label} is not a valid URL: ${url}`);
+    return errors;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    errors.push(`${label} must use http or https: ${url}`);
+  }
+  if (parsed.username || parsed.password) {
+    errors.push(`${label} must not include credentials: ${url}`);
   }
   return errors;
 }

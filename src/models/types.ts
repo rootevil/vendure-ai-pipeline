@@ -29,6 +29,9 @@ export const TaskRetryPolicySchema = z.object({
 });
 export type TaskRetryPolicy = z.infer<typeof TaskRetryPolicySchema>;
 
+export const ValidationCheckStatusSchema = z.enum(['PASS', 'FAIL', 'ERROR']);
+export type ValidationCheckStatus = z.infer<typeof ValidationCheckStatusSchema>;
+
 export const ValidationStepSchema = z.discriminatedUnion('type', [
   z.object({
     id: z.string().min(1),
@@ -50,6 +53,60 @@ export const ValidationStepSchema = z.discriminatedUnion('type', [
     id: z.string().min(1),
     type: z.literal('changed_files_include'),
     path: z.string().min(1),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('application_health'),
+    url: z.string().url(),
+    expectStatus: z.number().int().min(100).max(599).default(200),
+    timeoutMs: z.number().int().positive().max(120_000).default(10_000),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('http_response'),
+    url: z.string().url(),
+    method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).default('GET'),
+    headers: z.record(z.string()).default({}),
+    body: z.string().optional(),
+    expectStatus: z.number().int().min(100).max(599),
+    expectBodyContains: z.string().optional(),
+    timeoutMs: z.number().int().positive().max(120_000).default(10_000),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('graphql_request'),
+    url: z.string().url(),
+    query: z.string().min(1),
+    variables: z.record(z.unknown()).default({}),
+    headers: z.record(z.string()).default({}),
+    expectNoErrors: z.boolean().default(true),
+    expectDataPath: z.string().min(1).optional(),
+    expectDataEquals: z.unknown().optional(),
+    timeoutMs: z.number().int().positive().max(120_000).default(10_000),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('database_state'),
+    driver: z.enum(['json_fixture', 'postgres']).default('json_fixture'),
+    /** Workspace-relative JSON fixture path when driver is json_fixture. */
+    fixturePath: z.string().min(1).optional(),
+    /** Connection string or env var reference for postgres driver. */
+    connectionString: z.string().min(1).optional(),
+    /** JSON path (dot notation) or SQL SELECT depending on driver. */
+    query: z.string().min(1),
+    expectEquals: z.unknown().optional(),
+    expectRowCount: z.number().int().nonnegative().optional(),
+    expectContains: z.unknown().optional(),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('browser_playwright'),
+    url: z.string().url(),
+    expectTitleContains: z.string().min(1).optional(),
+    expectSelector: z.string().min(1).optional(),
+    expectTextContains: z.string().min(1).optional(),
+    screenshotName: z.string().min(1).default('browser.png'),
+    timeoutMs: z.number().int().positive().max(120_000).default(15_000),
   }),
 ]);
 export type ValidationStep = z.infer<typeof ValidationStepSchema>;
@@ -113,11 +170,28 @@ export interface AttemptRecord {
   readonly agentClaimedSuccess: boolean;
 }
 
+export interface ValidationCheckResult {
+  readonly checkName: string;
+  readonly status: ValidationCheckStatus;
+  readonly expected: string;
+  readonly actual: string;
+  readonly timestamp: string;
+  readonly output: string;
+  readonly evidencePath: string;
+}
+
 export interface ValidationStepResult {
   readonly id: string;
   readonly type: string;
   readonly passed: boolean;
   readonly detail: string;
+  readonly checkName: string;
+  readonly status: ValidationCheckStatus;
+  readonly expected: string;
+  readonly actual: string;
+  readonly timestamp: string;
+  readonly output: string;
+  readonly evidencePath: string;
 }
 
 export interface ExecutionReport {
@@ -136,6 +210,7 @@ export interface ExecutionReport {
   readonly attempts: readonly AttemptRecord[];
   readonly changedFiles: readonly string[];
   readonly validationSteps: readonly ValidationStepResult[];
+  readonly validationChecks: readonly ValidationCheckResult[];
   readonly validatorNotes: readonly string[];
   readonly agentSummary: string | null;
   readonly artifactDir: string;
@@ -157,6 +232,7 @@ export interface RunResult {
   readonly exitCode: number;
   readonly changedFiles: readonly string[];
   readonly validationSteps: readonly ValidationStepResult[];
+  readonly validationChecks: readonly ValidationCheckResult[];
   readonly report: ExecutionReport | null;
   readonly workspaceCleaned: boolean;
 }

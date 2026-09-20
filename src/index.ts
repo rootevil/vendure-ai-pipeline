@@ -14,6 +14,7 @@ export {
   AllowedToolSchema,
   TaskRetryPolicySchema,
   ValidationStepSchema,
+  ValidationCheckStatusSchema,
   type TaskDefinition,
   type TaskStage,
   type RunMode,
@@ -23,6 +24,8 @@ export {
   type TaskRetryPolicy,
   type ValidationStep,
   type ValidationStepResult,
+  type ValidationCheckResult,
+  type ValidationCheckStatus,
   type AttemptRecord,
   type RunResult,
   type RunManifest,
@@ -73,6 +76,23 @@ export {
   type ValidatorDecision,
   ArtifactPresenceValidator,
 } from './validator/validator.js';
+export {
+  IndependentValidator,
+  type IndependentValidatorDependencies,
+  toStepResult,
+} from './validator/independent-validator.js';
+export { runIndependentCheck, createDefaultCheckContext } from './validator/run-checks.js';
+export {
+  type HttpFetcher,
+  type DatabaseExecutor,
+  type BrowserLauncher,
+  type BrowserPage,
+  type CheckRunnerContext,
+} from './validator/check-types.js';
+export {
+  createFakeBrowserLauncher,
+  playwrightBrowserLauncher,
+} from './validator/browser-launcher.js';
 export {
   type EvidenceCollector,
   type EvidenceBundleInput,

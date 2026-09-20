@@ -44,8 +44,17 @@ function renderMarkdown(report: ExecutionReport): string {
     '',
     ...report.validationSteps.map(
       (step) =>
-        `- \`${step.id}\` (${step.type}): ${step.passed ? 'PASS' : 'FAIL'} — ${step.detail}`,
+        `- \`${step.id}\` (${step.type}): ${step.status} — expected: ${step.expected}; actual: ${step.actual}; evidence: ${step.evidencePath}`,
     ),
+    '',
+    `## Independent checks`,
+    '',
+    ...(report.validationChecks.length > 0
+      ? report.validationChecks.map(
+          (check) =>
+            `- \`${check.checkName}\`: ${check.status} @ ${check.timestamp} — ${check.expected} → ${check.actual}`,
+        )
+      : ['- (none)']),
     '',
     `## Validator notes`,
     '',

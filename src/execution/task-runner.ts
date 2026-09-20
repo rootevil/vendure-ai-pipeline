@@ -10,9 +10,9 @@ import type { Logger } from '../logging/logger.js';
 import type { ExecutionReport, RunResult, TaskDefinition } from '../models/types.js';
 import { createExecutionContext, type ExecutionContext } from '../safety/execution-context.js';
 import { assertTaskSafe } from '../task/task-safety.js';
-import { ArtifactPresenceValidator } from '../validator/validator.js';
+import type { BrowserLauncher, DatabaseExecutor, HttpFetcher } from '../validator/check-types.js';
+import { IndependentValidator } from '../validator/independent-validator.js';
 import { writeExecutionReport } from './report.js';
-import { runValidationSteps, validationStepsPassed } from './validation-steps.js';
 
 const FLOW_STEPS = [
   'parse/validate task',
@@ -32,11 +32,14 @@ export interface TaskRunnerDependencies {
   readonly agent?: AgentAdapter;
   readonly now?: () => Date;
   readonly runTests?: (context: ExecutionContext) => Promise<number>;
+  readonly fetchHttp?: HttpFetcher;
+  readonly executeDatabase?: DatabaseExecutor;
+  readonly launchBrowser?: BrowserLauncher;
 }
 
 /**
- * Owns the Phase 4 end-to-end task execution flow.
- * Rejects unsafe tasks before any agent work begins.
+ * Owns the end-to-end task execution flow.
+ * Final PASS/BLOCK is decided only by the independent validator.
  */
 export class TaskRunner {
   constructor(private readonly deps: TaskRunnerDependencies) {}
@@ -56,10 +59,20 @@ export class TaskRunner {
         },
       });
 
+    const validator = new IndependentValidator({
+      allowNetwork: config.allowNetwork,
+      ...(this.deps.fetchHttp !== undefined ? { fetchHttp: this.deps.fetchHttp } : {}),
+      ...(this.deps.executeDatabase !== undefined
+        ? { executeDatabase: this.deps.executeDatabase }
+        : {}),
+      ...(this.deps.launchBrowser !== undefined ? { launchBrowser: this.deps.launchBrowser } : {}),
+      ...(this.deps.now !== undefined ? { now: this.deps.now } : {}),
+    });
+
     const controller = new PipelineController({
       config,
       agent,
-      validator: new ArtifactPresenceValidator(),
+      validator,
       evidence: new FileEvidenceCollector(),
       logger: this.deps.logger,
       ...(this.deps.now !== undefined ? { now: this.deps.now } : {}),
@@ -78,28 +91,13 @@ export class TaskRunner {
       logger: this.deps.logger,
     });
 
-    const presentEvidence = listPresentEvidence(result.artifactDir, [
-      ...task.requiredEvidence,
-      'diff.patch',
-      'attempts.json',
-    ]);
-
-    const validationSteps = runValidationSteps({
-      task,
-      context,
-      presentEvidence,
-      changedFiles: result.changedFiles,
-    });
-
     flow.push(FLOW_STEPS[6]);
-    let status = result.status;
-    let exitCode = result.exitCode;
+    // Pipeline status is already decided solely by IndependentValidator.
+    const status = result.status;
+    const exitCode = result.exitCode;
     const validatorNotes = [...result.validatorNotes];
-    if (!validationStepsPassed(validationSteps)) {
-      status = status === 'AUTH_REQUIRED' ? status : 'BLOCK';
-      exitCode = status === 'AUTH_REQUIRED' ? exitCode : 1;
-      validatorNotes.push('One or more task validationSteps failed');
-    }
+    const validationSteps = result.validationSteps;
+    const validationChecks = result.validationChecks;
 
     let workspaceCleaned = false;
     if (task.cleanupWorkspace) {
@@ -130,6 +128,7 @@ export class TaskRunner {
       attempts: result.attempts,
       changedFiles: result.changedFiles,
       validationSteps,
+      validationChecks,
       validatorNotes,
       agentSummary: result.agentSummary,
       artifactDir: result.artifactDir,
@@ -155,6 +154,7 @@ export class TaskRunner {
       report,
       workspaceCleaned,
       validationSteps,
+      validationChecks,
     };
   }
 }
@@ -174,8 +174,4 @@ function applyTaskOverrides(config: PipelineConfig, task: TaskDefinition): Pipel
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)];
-}
-
-function listPresentEvidence(artifactDir: string, candidates: readonly string[]): string[] {
-  return candidates.filter((name) => existsSync(join(artifactDir, name)));
 }

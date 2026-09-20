@@ -197,6 +197,7 @@ export class PipelineController {
       finishedAt,
     });
 
+    // Final PASS/BLOCK comes only from the independent validator — never from agent claims.
     const decision = await this.deps.validator.validate({
       context,
       mode: context.mode,
@@ -204,12 +205,16 @@ export class PipelineController {
       requiredEvidence: task.requiredEvidence,
       presentEvidence,
       testExitCode,
+      changedFiles: lastOutcome?.changedFiles ?? [],
     });
+
+    const status = authRequired ? 'AUTH_REQUIRED' : decision.status;
+    const exitCode = authRequired ? 2 : decision.exitCode;
 
     // Rewrite status.json via a second evidence write for final validator status.
     await this.deps.evidence.writeBundle({
       context,
-      status: authRequired ? 'AUTH_REQUIRED' : decision.status,
+      status,
       attempts,
       stdout: lastOutcome?.stdout ?? '',
       stderr: lastOutcome?.stderr ?? '',
@@ -225,8 +230,9 @@ export class PipelineController {
         '',
         `- Run ID: \`${context.runId}\``,
         `- Mode: \`${context.mode}\``,
-        `- Validator status: \`${authRequired ? 'AUTH_REQUIRED' : decision.status}\``,
+        `- Validator status: \`${status}\``,
         `- Stop reason: ${stopReason ?? 'n/a'}`,
+        `- Agent claimed success: ${String(lastOutcome?.claimedSuccess ?? false)} (ignored for verdict)`,
         ...decision.notes.map((note) => `- Note: ${note}`),
       ].join('\n'),
       networkUsed: false,
@@ -234,9 +240,6 @@ export class PipelineController {
       maxIdenticalRetries: this.deps.config.maxIdenticalRetries,
       finishedAt,
     });
-
-    const status = authRequired ? 'AUTH_REQUIRED' : decision.status;
-    const exitCode = authRequired ? 2 : decision.exitCode;
 
     logger.info('pipeline run finished', { status, exitCode, artifactDir: context.artifactDir });
 
@@ -253,7 +256,8 @@ export class PipelineController {
       agentSummary: lastOutcome?.summary ?? null,
       exitCode,
       changedFiles: lastOutcome?.changedFiles ?? [],
-      validationSteps: [],
+      validationSteps: decision.stepResults ?? [],
+      validationChecks: decision.checks ?? [],
       report: null,
       workspaceCleaned: false,
     };
@@ -299,6 +303,7 @@ export class PipelineController {
       exitCode: input.exitCode,
       changedFiles: input.lastOutcome?.changedFiles ?? [],
       validationSteps: [],
+      validationChecks: [],
       report: null,
       workspaceCleaned: false,
     };

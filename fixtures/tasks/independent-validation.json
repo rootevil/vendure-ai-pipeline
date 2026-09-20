@@ -1,0 +1,104 @@
+{
+  "id": "independent-validation-demo",
+  "title": "Independent validation demo",
+  "goal": "Prove the independent validator can check health, HTTP, GraphQL, database fixtures, and browser evidence without trusting the agent.",
+  "acceptanceCriteria": [
+    "Application health endpoint returns 200",
+    "HTTP API returns expected payload marker",
+    "GraphQL query returns products.totalItems",
+    "Database fixture count matches expectation",
+    "Browser title contains expected marker"
+  ],
+  "allowedTools": ["filesystem", "mock"],
+  "timeoutMs": 60000,
+  "retryPolicy": {
+    "maxIdenticalRetries": 2,
+    "maxTotalAttempts": 3
+  },
+  "validationSteps": [
+    {
+      "id": "evidence",
+      "type": "evidence_present"
+    },
+    {
+      "id": "health",
+      "type": "application_health",
+      "url": "http://127.0.0.1:3999/health",
+      "expectStatus": 200,
+      "timeoutMs": 5000
+    },
+    {
+      "id": "api",
+      "type": "http_response",
+      "url": "http://127.0.0.1:3999/api/products",
+      "method": "GET",
+      "headers": {},
+      "expectStatus": 200,
+      "expectBodyContains": "items",
+      "timeoutMs": 5000
+    },
+    {
+      "id": "gql",
+      "type": "graphql_request",
+      "url": "http://127.0.0.1:3999/graphql",
+      "query": "{ products { totalItems } }",
+      "variables": {},
+      "headers": {},
+      "expectNoErrors": true,
+      "expectDataPath": "products.totalItems",
+      "expectDataEquals": 2,
+      "timeoutMs": 5000
+    },
+    {
+      "id": "db",
+      "type": "database_state",
+      "driver": "json_fixture",
+      "fixturePath": "data/catalog.json",
+      "query": "count",
+      "expectEquals": 1
+    },
+    {
+      "id": "browser",
+      "type": "browser_playwright",
+      "url": "http://127.0.0.1:3999/health",
+      "expectTitleContains": "Healthy",
+      "expectSelector": "h1",
+      "expectTextContains": "OK",
+      "screenshotName": "health.png",
+      "timeoutMs": 5000
+    }
+  ],
+  "mode": "acceptance",
+  "sourcePaths": [],
+  "writeAllowlist": ["src", "data"],
+  "requiredEvidence": [
+    "run-manifest.json",
+    "status.json",
+    "stdout.log",
+    "stderr.log",
+    "change-summary.md",
+    "rollback.md",
+    "summary.md"
+  ],
+  "stages": [
+    {
+      "id": "validate-independently",
+      "description": "Independent validator executes health/HTTP/GraphQL/DB/browser checks",
+      "preconditions": ["Target services reachable when network allowed"],
+      "actions": ["Do not trust agent claimed_success"],
+      "expectedChecks": [
+        "application_health",
+        "http_response",
+        "graphql_request",
+        "database_state",
+        "browser_playwright"
+      ],
+      "cleanup": ["Disposable workspace may be removed after evidence is collected"]
+    }
+  ],
+  "circuitBreakRules": [
+    "Agent claimed success never grants PASS",
+    "Validator decides PASS or BLOCK from check evidence only"
+  ],
+  "cleanupWorkspace": true
+}
