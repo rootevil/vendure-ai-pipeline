@@ -1,0 +1,30 @@
+{
+  "name": "vendure-ai-pipeline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reusable autonomous engineering and validation pipeline skeleton for Vendure",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "vendure-pipeline": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test test/**/*.test.ts",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "pipeline": "node --import tsx src/cli/index.ts"
+  },
+  "dependencies": {
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "prettier": "^3.5.3",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

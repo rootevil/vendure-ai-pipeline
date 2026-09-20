@@ -1,0 +1,32 @@
+{
+  "id": "public-catalog-migration",
+  "title": "Public catalog migration adapter",
+  "goal": "Migrate active legacy catalog records into the public catalog shape without leaking internal fields.",
+  "mode": "acceptance",
+  "sourcePaths": ["evaluation-demo/app/fixtures/legacy-catalog.json"],
+  "writeAllowlist": ["evaluation-demo/app/src"],
+  "requiredEvidence": [
+    "run-manifest.json",
+    "status.json",
+    "stdout.log",
+    "stderr.log",
+    "change-summary.md",
+    "rollback.md",
+    "summary.md"
+  ],
+  "stages": [
+    {
+      "id": "implement-adapter",
+      "description": "Implement migrateCatalog in evaluation-demo/app/src/catalog.mjs",
+      "preconditions": ["Legacy fixture is present", "Acceptance tests are present"],
+      "actions": ["Read fixture", "Transform active records", "Omit internalNote"],
+      "expectedChecks": ["node --test evaluation-demo/app/tests/acceptance.test.mjs exits 0"],
+      "cleanup": ["Leave disposable workspace intact until cleanup script runs"]
+    }
+  ],
+  "circuitBreakRules": [
+    "Do not use network",
+    "Do not commit secrets",
+    "Stop on path escape outside write allowlist"
+  ]
+}
