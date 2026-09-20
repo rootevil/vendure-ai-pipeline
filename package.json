@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "pipeline": "node --import tsx src/cli/index.ts",
+    "scenario:public-catalog": "node --import tsx scripts/run-public-catalog-scenario.mjs",
     "docker:start": "./scripts/start.sh",
     "docker:stop": "./scripts/stop.sh",
     "docker:check": "./scripts/check.sh",

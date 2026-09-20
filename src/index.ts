@@ -115,3 +115,19 @@ export {
   type PipelineControllerDependencies,
 } from './controller/pipeline-controller.js';
 export { runCli } from './cli/index.js';
+export {
+  runPublicCatalogScenario,
+  buildScenarioTask,
+  type PublicCatalogScenarioOptions,
+  type PublicCatalogScenarioResult,
+} from './scenarios/public-catalog/run-scenario.js';
+export {
+  PublicCatalogScenarioAgent,
+  materializeEvaluationDemo,
+  seedIncompleteCatalog,
+  runAcceptanceTests,
+} from './scenarios/public-catalog/scenario-agent.js';
+export {
+  startPublicCatalogDemoServer,
+  type DemoServerHandle,
+} from './scenarios/public-catalog/demo-server.js';

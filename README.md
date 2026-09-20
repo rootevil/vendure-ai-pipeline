@@ -11,8 +11,18 @@ npm install
 npm run format
 npm run typecheck
 npm test
-npm run pipeline -- run --task fixtures/tasks/public-catalog.json
+npm run pipeline -- run --task fixtures/tasks/hello-change.json
 ```
+
+## Public Vendure catalog scenario (Phase 8)
+
+Reproducible end-to-end demo using only `evaluation-demo/` (not the full client migration):
+
+```bash
+npm run scenario:public-catalog
+```
+
+See [docs/PUBLIC_CATALOG_SCENARIO.md](docs/PUBLIC_CATALOG_SCENARIO.md).
 
 Configuration is via environment variables (see `.env.example`). Do not commit secrets.
 
