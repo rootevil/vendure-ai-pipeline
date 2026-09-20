@@ -59,7 +59,7 @@ export class FileEvidenceCollector implements EvidenceCollector {
       '## Attempts',
       ...input.attempts.map(
         (attempt) =>
-          `- #${attempt.attempt} ${attempt.failureClass} claimedSuccess=${String(attempt.agentClaimedSuccess)} — ${attempt.message}`,
+          `- #${attempt.attempt} ${attempt.failureKind}/${attempt.failureClass} claimedSuccess=${String(attempt.agentClaimedSuccess)} — ${attempt.message}`,
       ),
       '',
       '## stdout',

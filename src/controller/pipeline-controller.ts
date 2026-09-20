@@ -3,6 +3,7 @@ import type { PipelineConfig } from '../config/load-config.js';
 import type { EvidenceCollector } from '../evidence/evidence-collector.js';
 import type { Logger } from '../logging/logger.js';
 import type { AttemptRecord, RunResult, TaskDefinition } from '../models/types.js';
+import { classifyFailure } from '../retry/failure-classifier.js';
 import { buildFailureSignature, RetryPolicy } from '../retry/retry-policy.js';
 import {
   assertNetworkAllowed,
@@ -86,25 +87,34 @@ export class PipelineController {
       } catch (error) {
         if (error instanceof SafetyError) {
           const finishedAt = nowFn().toISOString();
+          const failureKind = classifyFailure({
+            isSafetyViolation: true,
+            failureCode: error.code,
+            message: error.message,
+          });
+          const signature = buildFailureSignature({
+            failureClass: 'non_recoverable',
+            failureKind,
+            message: error.message,
+            code: error.code,
+          });
           attempts.push({
             attempt: attempts.length + 1,
             startedAt: attemptStarted.toISOString(),
             finishedAt,
-            failureClass: error.code === 'SECRET_PATTERN' ? 'non_recoverable' : 'non_recoverable',
-            signature: buildFailureSignature({
-              failureClass: 'non_recoverable',
-              message: error.message,
-              code: error.code,
-            }),
+            failureClass: 'non_recoverable',
+            failureKind,
+            signature,
             message: error.message,
             agentClaimedSuccess: false,
           });
+          retryPolicy.decide({ signature, failureKind: 'unsafe_unknown' });
           return this.finalizeBlocked({
             context,
             attempts,
             lastOutcome,
-            status: error.code === 'SECRET_PATTERN' ? 'BLOCK' : 'BLOCK',
-            notes: [error.message, 'Safe-stop triggered by safety kernel'],
+            status: 'BLOCK',
+            notes: [error.message, 'Safe-stop triggered by safety kernel (unsafe/unknown)'],
             finishedAt,
             exitCode: 1,
           });
@@ -113,8 +123,16 @@ export class PipelineController {
       }
 
       lastOutcome = outcome;
+      let failureKind = classifyFailure({
+        failureClass: outcome.failureClass,
+        ...(outcome.failureCode !== undefined ? { failureCode: outcome.failureCode } : {}),
+        message: outcome.summary || outcome.stderr || 'agent-failure',
+        claimedSuccess: outcome.claimedSuccess,
+      });
+
       const signature = buildFailureSignature({
         failureClass: outcome.failureClass,
+        failureKind,
         message: outcome.summary || outcome.stderr || 'agent-failure',
         ...(outcome.failureCode !== undefined ? { code: outcome.failureCode } : {}),
       });
@@ -125,6 +143,7 @@ export class PipelineController {
         startedAt: attemptStarted.toISOString(),
         finishedAt,
         failureClass: outcome.failureClass,
+        failureKind,
         signature,
         message: outcome.summary || outcome.stderr || 'agent-failure',
         agentClaimedSuccess: outcome.claimedSuccess,
@@ -133,30 +152,51 @@ export class PipelineController {
       if (outcome.failureClass === 'auth_required') {
         authRequired = true;
         stopReason = 'Agent reported AUTH_REQUIRED';
+        retryPolicy.decide({
+          signature,
+          failureKind: 'unsafe_unknown',
+          authRequired: true,
+        });
         break;
       }
 
       if (outcome.claimedSuccess && outcome.failureClass === 'recoverable') {
-        // Inconsistent agent report — treat as non-success and consult retry policy.
         logger.warn(
-          'agent claimed success with recoverable failure class; continuing control loop',
+          'agent claimed success with recoverable failure class; handing off to validator only',
         );
       }
 
-      if (outcome.claimedSuccess && outcome.failureClass !== 'non_recoverable') {
-        // Agent claims done; still leave PASS/BLOCK to validator after evidence.
-        stopReason = 'Agent claimed completion; handing off to validator';
+      // Agent claims done → hand off to independent validator. Never treat claim as PASS.
+      if (outcome.claimedSuccess && failureKind !== 'unsafe_unknown') {
+        stopReason = 'Agent claimed completion; handing off to independent validator';
         break;
       }
 
-      const decision = retryPolicy.recordAttempt(signature, outcome.failureClass);
+      if (outcome.claimedSuccess && failureKind === 'unsafe_unknown') {
+        stopReason = 'Agent claimed success with unsafe/unknown failure — stopping';
+        retryPolicy.decide({ signature, failureKind: 'unsafe_unknown' });
+        break;
+      }
+
+      const decision = retryPolicy.decide({ signature, failureKind });
       logger.info('retry decision', {
         shouldRetry: decision.shouldRetry,
         reason: decision.reason,
+        failureKind: decision.failureKind,
+        circuitState: decision.circuitState,
+        action: decision.action,
         attempt: attempts.length,
       });
 
       if (!decision.shouldRetry) {
+        // Mark the terminal attempt kind as repeated when the budget tripped.
+        if (decision.failureKind === 'repeated' && attempts.length > 0) {
+          const last = attempts[attempts.length - 1];
+          if (last) {
+            attempts[attempts.length - 1] = { ...last, failureKind: 'repeated' };
+            failureKind = 'repeated';
+          }
+        }
         stopReason = decision.reason;
         break;
       }
@@ -190,6 +230,7 @@ export class PipelineController {
         `- Stop reason: ${stopReason ?? 'n/a'}`,
         `- Agent: ${this.deps.agent.name}`,
         `- Agent claimed success: ${String(lastOutcome?.claimedSuccess ?? false)}`,
+        `- Circuit state: ${retryPolicy.circuitState}`,
       ].join('\n'),
       networkUsed: false,
       secretsUsed: false,
@@ -197,7 +238,8 @@ export class PipelineController {
       finishedAt,
     });
 
-    // Final PASS/BLOCK comes only from the independent validator — never from agent claims.
+    // Final PASS/BLOCK comes only from the independent validator — never from agent claims
+    // and never by bypassing validation after retries.
     const decision = await this.deps.validator.validate({
       context,
       mode: context.mode,
@@ -208,10 +250,13 @@ export class PipelineController {
       changedFiles: lastOutcome?.changedFiles ?? [],
     });
 
+    if (!authRequired && decision.status === 'BLOCK') {
+      retryPolicy.recordValidationFailure(decision.notes.join('; ') || 'validator BLOCK');
+    }
+
     const status = authRequired ? 'AUTH_REQUIRED' : decision.status;
     const exitCode = authRequired ? 2 : decision.exitCode;
 
-    // Rewrite status.json via a second evidence write for final validator status.
     await this.deps.evidence.writeBundle({
       context,
       status,
@@ -233,6 +278,7 @@ export class PipelineController {
         `- Validator status: \`${status}\``,
         `- Stop reason: ${stopReason ?? 'n/a'}`,
         `- Agent claimed success: ${String(lastOutcome?.claimedSuccess ?? false)} (ignored for verdict)`,
+        `- Circuit state: ${retryPolicy.circuitState}`,
         ...decision.notes.map((note) => `- Note: ${note}`),
       ].join('\n'),
       networkUsed: false,
@@ -241,7 +287,12 @@ export class PipelineController {
       finishedAt,
     });
 
-    logger.info('pipeline run finished', { status, exitCode, artifactDir: context.artifactDir });
+    logger.info('pipeline run finished', {
+      status,
+      exitCode,
+      artifactDir: context.artifactDir,
+      circuitState: retryPolicy.circuitState,
+    });
 
     return {
       runId: context.runId,

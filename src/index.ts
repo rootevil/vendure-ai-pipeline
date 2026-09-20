@@ -11,6 +11,7 @@ export {
   RunModeSchema,
   RunStatusSchema,
   FailureClassSchema,
+  FailureKindSchema,
   AllowedToolSchema,
   TaskRetryPolicySchema,
   ValidationStepSchema,
@@ -20,6 +21,7 @@ export {
   type RunMode,
   type RunStatus,
   type FailureClass,
+  type FailureKind,
   type AllowedTool,
   type TaskRetryPolicy,
   type ValidationStep,
@@ -52,6 +54,12 @@ export {
   type ExecutionContext,
 } from './safety/execution-context.js';
 export { RetryPolicy, buildFailureSignature, type RetryDecision } from './retry/retry-policy.js';
+export {
+  classifyFailure,
+  failureKindToLegacyClass,
+  type ClassifyFailureInput,
+} from './retry/failure-classifier.js';
+export { CircuitBreaker, type CircuitState } from './retry/circuit-breaker.js';
 export {
   type AgentAdapter,
   type AgentRunOutcome,

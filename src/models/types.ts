@@ -20,6 +20,17 @@ export const FailureClassSchema = z.enum([
 ]);
 export type FailureClass = z.infer<typeof FailureClassSchema>;
 
+/** Phase 7 bounded-recovery taxonomy. */
+export const FailureKindSchema = z.enum([
+  'transient_infrastructure',
+  'recoverable_implementation',
+  'validation',
+  'timeout',
+  'repeated',
+  'unsafe_unknown',
+]);
+export type FailureKind = z.infer<typeof FailureKindSchema>;
+
 export const AllowedToolSchema = z.enum(['filesystem', 'git', 'node_test', 'mock', 'openhands']);
 export type AllowedTool = z.infer<typeof AllowedToolSchema>;
 
@@ -165,6 +176,7 @@ export interface AttemptRecord {
   readonly startedAt: string;
   readonly finishedAt: string;
   readonly failureClass: FailureClass;
+  readonly failureKind: FailureKind;
   readonly signature: string;
   readonly message: string;
   readonly agentClaimedSuccess: boolean;
