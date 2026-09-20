@@ -4,7 +4,7 @@ Contractor-owned workspace for a reusable autonomous engineering and validation 
 
 ## Phase 1 skeleton
 
-TypeScript control plane with swappable agent and validator interfaces. The default agent is a noop stub (no complex AI behavior yet). The **validator**, not the agent, decides `PASS` / `BLOCK`.
+TypeScript control plane with swappable agent and validator interfaces. Default agent mode is `mock` (no LLM). Set `PIPELINE_AGENT_MODE=openhands` to invoke the OpenHands CLI. The **validator**, not the agent, decides `PASS` / `BLOCK`.
 
 ```bash
 npm install

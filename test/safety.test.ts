@@ -44,6 +44,10 @@ function configFor(root: string): PipelineConfig {
     allowNetwork: false,
     logLevel: 'error',
     writeAllowlist: [],
+    agentMode: 'mock',
+    agentTimeoutMs: 120_000,
+    openhandsCommand: 'openhands',
+    mockAgentBehavior: 'success',
   };
 }
 

@@ -13,6 +13,10 @@ test('loadConfig applies defaults when env is empty', () => {
   assert.equal(config.allowNetwork, false);
   assert.equal(config.logLevel, 'info');
   assert.deepEqual(config.writeAllowlist, []);
+  assert.equal(config.agentMode, 'mock');
+  assert.equal(config.agentTimeoutMs, 120_000);
+  assert.equal(config.openhandsCommand, 'openhands');
+  assert.equal(config.mockAgentBehavior, 'success');
 });
 
 test('loadConfig parses boolean and CSV allowlist', () => {
@@ -24,6 +28,10 @@ test('loadConfig parses boolean and CSV allowlist', () => {
     PIPELINE_MAX_TOTAL_ATTEMPTS: '4',
     PIPELINE_LOG_LEVEL: 'debug',
     PIPELINE_RUN_ID: 'fixed-run',
+    PIPELINE_AGENT_MODE: 'openhands',
+    PIPELINE_AGENT_TIMEOUT_MS: '60000',
+    PIPELINE_OPENHANDS_COMMAND: 'openhands',
+    PIPELINE_MOCK_AGENT_BEHAVIOR: 'failure',
   });
   assert.equal(config.mode, 'baseline');
   assert.equal(config.allowNetwork, true);
@@ -32,6 +40,9 @@ test('loadConfig parses boolean and CSV allowlist', () => {
   assert.equal(config.maxTotalAttempts, 4);
   assert.equal(config.logLevel, 'debug');
   assert.equal(config.runId, 'fixed-run');
+  assert.equal(config.agentMode, 'openhands');
+  assert.equal(config.agentTimeoutMs, 60_000);
+  assert.equal(config.mockAgentBehavior, 'failure');
 });
 
 test('loadConfig rejects identical retries above total attempts', () => {

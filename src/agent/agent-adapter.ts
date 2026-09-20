@@ -2,8 +2,9 @@ import type { ExecutionContext } from '../safety/execution-context.js';
 import type { FailureClass } from '../models/types.js';
 
 /**
- * Pluggable coding/debugging worker. Implementations (OpenHands, etc.) are
- * swapped later; Phase 1 ships a deterministic noop stub only.
+ * Pluggable coding/debugging worker.
+ * Implementations wrap OpenHands (or peers). The agent must never decide
+ * final Pipeline PASS/BLOCK — that belongs exclusively to the validator.
  */
 export interface AgentAdapter {
   readonly name: string;
@@ -21,6 +22,13 @@ export interface AgentRunOutcome {
   readonly diff: string;
 }
 
+/** Informational envelope an agent may write; never includes pipeline status. */
+export interface AgentResultEnvelope {
+  readonly summary: string;
+  readonly claimed_success: boolean;
+  readonly changed_files?: readonly string[];
+}
+
 export class NoopAgentAdapter implements AgentAdapter {
   readonly name = 'noop';
 
@@ -29,7 +37,7 @@ export class NoopAgentAdapter implements AgentAdapter {
     return {
       claimedSuccess: false,
       summary:
-        'Noop agent does not implement coding behavior. Replace with OpenHands (or peer) adapter.',
+        'Noop agent does not implement coding behavior. Use PIPELINE_AGENT_MODE=mock|openhands.',
       stdout: '',
       stderr: 'noop-agent: no implementation',
       failureClass: 'non_recoverable',

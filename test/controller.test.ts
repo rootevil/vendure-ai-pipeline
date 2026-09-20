@@ -26,6 +26,10 @@ function configFor(root: string, overrides: Partial<PipelineConfig> = {}): Pipel
     allowNetwork: false,
     logLevel: 'error',
     writeAllowlist: ['src'],
+    agentMode: 'mock',
+    agentTimeoutMs: 120_000,
+    openhandsCommand: 'openhands',
+    mockAgentBehavior: 'success',
     ...overrides,
   };
 }

@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { NoopAgentAdapter } from '../agent/agent-adapter.js';
+import { createAgentAdapter } from '../agent/agent-factory.js';
 import { loadConfig, ConfigError } from '../config/load-config.js';
 import { PipelineController } from '../controller/pipeline-controller.js';
 import { FileEvidenceCollector } from '../evidence/evidence-collector.js';
@@ -27,7 +27,9 @@ function printUsage(stream: NodeJS.WritableStream): void {
       '  PIPELINE_MODE, PIPELINE_ARTIFACTS_DIR, PIPELINE_WORKSPACE_DIR,',
       '  PIPELINE_MAX_IDENTICAL_RETRIES, PIPELINE_MAX_TOTAL_ATTEMPTS,',
       '  PIPELINE_ALLOW_NETWORK, PIPELINE_LOG_LEVEL, PIPELINE_RUN_ID,',
-      '  PIPELINE_WRITE_ALLOWLIST',
+      '  PIPELINE_WRITE_ALLOWLIST, PIPELINE_AGENT_MODE (mock|openhands|noop),',
+      '  PIPELINE_AGENT_TIMEOUT_MS, PIPELINE_OPENHANDS_COMMAND,',
+      '  PIPELINE_MOCK_AGENT_BEHAVIOR',
       '',
     ].join('\n'),
   );
@@ -79,10 +81,11 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
       stderr,
     });
     const task = loadTaskDefinitionFromJsonFile(resolve(taskPath));
+    const agent = createAgentAdapter({ config });
 
     const controller = new PipelineController({
       config,
-      agent: new NoopAgentAdapter(),
+      agent,
       validator: new ArtifactPresenceValidator(),
       evidence: new FileEvidenceCollector(),
       logger,

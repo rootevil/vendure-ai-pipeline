@@ -42,6 +42,15 @@ const CsvPaths = z
   });
 
 const LogLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
+const AgentModeSchema = z.enum(['mock', 'openhands', 'noop']);
+const MockBehaviorSchema = z.enum([
+  'success',
+  'failure',
+  'timeout',
+  'retryable',
+  'malformed',
+  'forbidden_verdict',
+]);
 
 const PipelineConfigSchema = z.object({
   mode: RunModeSchema.default('acceptance'),
@@ -53,9 +62,14 @@ const PipelineConfigSchema = z.object({
   logLevel: LogLevelSchema.default('info'),
   runId: z.string().optional(),
   writeAllowlist: z.array(z.string()).default([]),
+  agentMode: AgentModeSchema.default('mock'),
+  agentTimeoutMs: z.number().int().positive().default(120_000),
+  openhandsCommand: z.string().min(1).default('openhands'),
+  mockAgentBehavior: MockBehaviorSchema.default('success'),
 });
 
 export type PipelineConfig = z.infer<typeof PipelineConfigSchema>;
+export type AgentMode = z.infer<typeof AgentModeSchema>;
 
 export class ConfigError extends Error {
   override readonly name = 'ConfigError';
@@ -72,6 +86,10 @@ function readEnv(env: NodeJS.ProcessEnv): Record<string, string | undefined> {
     logLevel: env.PIPELINE_LOG_LEVEL,
     runId: env.PIPELINE_RUN_ID,
     writeAllowlistRaw: env.PIPELINE_WRITE_ALLOWLIST,
+    agentMode: env.PIPELINE_AGENT_MODE,
+    agentTimeoutMsRaw: env.PIPELINE_AGENT_TIMEOUT_MS,
+    openhandsCommand: env.PIPELINE_OPENHANDS_COMMAND,
+    mockAgentBehavior: env.PIPELINE_MOCK_AGENT_BEHAVIOR,
   };
 }
 
@@ -82,6 +100,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PipelineConfig
     const maxTotalAttempts = PositiveIntFromEnv(5).parse(raw.maxTotalAttemptsRaw);
     const allowNetwork = BooleanFromEnv.parse(raw.allowNetworkRaw);
     const writeAllowlist = CsvPaths.parse(raw.writeAllowlistRaw);
+    const agentTimeoutMs = PositiveIntFromEnv(120_000).parse(raw.agentTimeoutMsRaw);
 
     const parsed = PipelineConfigSchema.parse({
       mode: raw.mode && raw.mode.length > 0 ? raw.mode : undefined,
@@ -93,6 +112,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): PipelineConfig
       logLevel: raw.logLevel && raw.logLevel.length > 0 ? raw.logLevel : undefined,
       runId: raw.runId && raw.runId.length > 0 ? raw.runId : undefined,
       writeAllowlist,
+      agentMode: raw.agentMode && raw.agentMode.length > 0 ? raw.agentMode : undefined,
+      agentTimeoutMs,
+      openhandsCommand:
+        raw.openhandsCommand && raw.openhandsCommand.length > 0 ? raw.openhandsCommand : undefined,
+      mockAgentBehavior:
+        raw.mockAgentBehavior && raw.mockAgentBehavior.length > 0
+          ? raw.mockAgentBehavior
+          : undefined,
     });
 
     if (parsed.maxIdenticalRetries > parsed.maxTotalAttempts) {

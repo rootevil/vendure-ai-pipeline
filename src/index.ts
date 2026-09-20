@@ -1,4 +1,9 @@
-export { loadConfig, ConfigError, type PipelineConfig } from './config/load-config.js';
+export {
+  loadConfig,
+  ConfigError,
+  type PipelineConfig,
+  type AgentMode,
+} from './config/load-config.js';
 export { createLogger, type Logger, type LogLevel } from './logging/logger.js';
 export {
   TaskDefinitionSchema,
@@ -32,8 +37,24 @@ export { RetryPolicy, buildFailureSignature, type RetryDecision } from './retry/
 export {
   type AgentAdapter,
   type AgentRunOutcome,
+  type AgentResultEnvelope,
   NoopAgentAdapter,
 } from './agent/agent-adapter.js';
+export { MockAgentAdapter, type MockAgentBehavior } from './agent/mock-adapter.js';
+export { OpenHandsAgentAdapter } from './agent/openhands-adapter.js';
+export { createAgentAdapter } from './agent/agent-factory.js';
+export {
+  parseAgentResultJson,
+  parseAgentResultEnvelope,
+  tryParseOpenHandsJsonl,
+  AgentOutputError,
+} from './agent/result-parser.js';
+export {
+  type ProcessRunner,
+  type ProcessRunRequest,
+  type ProcessRunResult,
+  SpawnProcessRunner,
+} from './agent/process-runner.js';
 export {
   type Validator,
   type ValidatorInput,
