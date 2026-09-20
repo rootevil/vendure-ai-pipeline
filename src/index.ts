@@ -131,3 +131,17 @@ export {
   startPublicCatalogDemoServer,
   type DemoServerHandle,
 } from './scenarios/public-catalog/demo-server.js';
+export {
+  runFailureDemo,
+  type FailureDemoMode,
+  type FailureDemoOptions,
+  type FailureDemoResult,
+  type FailureDemoStep,
+} from './scenarios/public-catalog/failure-demo.js';
+export {
+  RecoverableFailureDemoAgent,
+  UnrecoverableFailureDemoAgent,
+  writeRepairBrief,
+  REPAIR_BRIEF_RELATIVE,
+  type RepairBrief,
+} from './scenarios/public-catalog/failure-agents.js';

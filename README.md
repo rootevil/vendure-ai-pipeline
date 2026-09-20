@@ -24,6 +24,15 @@ npm run scenario:public-catalog
 
 See [docs/PUBLIC_CATALOG_SCENARIO.md](docs/PUBLIC_CATALOG_SCENARIO.md).
 
+## Failure demonstration (Phase 9)
+
+```bash
+npm run scenario:failure-recoverable    # detect → repair → PASS
+npm run scenario:failure-unrecoverable  # unsafe → BLOCK, no repair
+```
+
+See [docs/FAILURE_DEMO.md](docs/FAILURE_DEMO.md).
+
 Configuration is via environment variables (see `.env.example`). Do not commit secrets.
 
 ## Isolated Docker environment
