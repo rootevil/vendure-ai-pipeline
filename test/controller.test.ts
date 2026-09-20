@@ -13,7 +13,7 @@ import { PipelineController } from '../src/controller/pipeline-controller.js';
 import { FileEvidenceCollector } from '../src/evidence/evidence-collector.js';
 import { createLogger } from '../src/logging/logger.js';
 import type { PipelineConfig } from '../src/config/load-config.js';
-import { parseTaskDefinition } from '../src/task/task-definition.js';
+import { minimalTask } from './helpers/minimal-task.js';
 import { ArtifactPresenceValidator } from '../src/validator/validator.js';
 
 function configFor(root: string, overrides: Partial<PipelineConfig> = {}): PipelineConfig {
@@ -34,13 +34,7 @@ function configFor(root: string, overrides: Partial<PipelineConfig> = {}): Pipel
   };
 }
 
-const task = parseTaskDefinition({
-  id: 'catalog',
-  title: 'Catalog',
-  goal: 'Migrate catalog',
-  writeAllowlist: ['src'],
-  stages: [{ id: 'one', description: 'Implement adapter' }],
-});
+const task = minimalTask();
 
 test('controller with noop agent ends BLOCK and writes evidence bundle', async () => {
   const root = mkdtempSync(join(tmpdir(), 'pipeline-ctrl-'));

@@ -134,15 +134,11 @@ export class MockAgentAdapter implements AgentAdapter {
     }
 
     // success (and retryable after first failure)
-    const targetRel = resolveWritableTarget(context);
-    const absolute = context.assertWritablePath(targetRel);
-    mkdirSync(dirname(absolute), { recursive: true });
-    writeFileSync(absolute, `// mock agent change for ${context.task.id}\n`, 'utf8');
-
+    const writtenFiles = writeSuccessArtifacts(context);
     const envelope = {
       summary: `Mock agent completed task ${context.task.id}`,
       claimed_success: true,
-      changed_files: [targetRel],
+      changed_files: writtenFiles,
     };
     writeFileSync(
       join(context.workspaceDir, 'agent-result.json'),
@@ -171,6 +167,40 @@ export class MockAgentAdapter implements AgentAdapter {
       diff: changes.diff,
     };
   }
+}
+
+function writeSuccessArtifacts(context: ExecutionContext): string[] {
+  const written: string[] = [];
+  const containsPaths = new Set(
+    context.task.validationSteps
+      .filter((step) => step.type === 'workspace_file_contains')
+      .map((step) => step.path.replace(/^\.\//, '')),
+  );
+
+  for (const step of context.task.validationSteps) {
+    if (step.type === 'workspace_file_contains') {
+      const absolute = context.assertWritablePath(step.path);
+      mkdirSync(dirname(absolute), { recursive: true });
+      writeFileSync(absolute, `${step.contains}\n`, 'utf8');
+      written.push(step.path.replace(/^\.\//, ''));
+    } else if (
+      step.type === 'workspace_file_exists' &&
+      !containsPaths.has(step.path.replace(/^\.\//, ''))
+    ) {
+      const absolute = context.assertWritablePath(step.path);
+      mkdirSync(dirname(absolute), { recursive: true });
+      writeFileSync(absolute, `// created for ${context.task.id}\n`, 'utf8');
+      written.push(step.path.replace(/^\.\//, ''));
+    }
+  }
+  if (written.length === 0) {
+    const targetRel = resolveWritableTarget(context);
+    const absolute = context.assertWritablePath(targetRel);
+    mkdirSync(dirname(absolute), { recursive: true });
+    writeFileSync(absolute, `// mock agent change for ${context.task.id}\n`, 'utf8');
+    written.push(targetRel);
+  }
+  return [...new Set(written)];
 }
 
 function resolveWritableTarget(context: ExecutionContext): string {

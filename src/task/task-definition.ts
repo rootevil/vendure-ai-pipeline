@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import { TaskDefinitionSchema, type TaskDefinition } from '../models/types.js';
+import { assertTaskSafe } from './task-safety.js';
 
 export class TaskDefinitionError extends Error {
   override readonly name = 'TaskDefinitionError';
@@ -15,6 +16,7 @@ export function parseTaskDefinition(raw: unknown): TaskDefinition {
         .join('; ')}`,
     );
   }
+  assertTaskSafe(parsed.data);
   return parsed.data;
 }
 

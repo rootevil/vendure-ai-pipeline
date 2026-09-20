@@ -2,32 +2,23 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { parseTaskDefinition, TaskDefinitionError } from '../src/task/task-definition.js';
+import { minimalTask } from './helpers/minimal-task.js';
 import { ArtifactPresenceValidator } from '../src/validator/validator.js';
 import { createLogger } from '../src/logging/logger.js';
 import type { ExecutionContext } from '../src/safety/execution-context.js';
 import type { TaskDefinition } from '../src/models/types.js';
 
 test('parseTaskDefinition accepts a minimal valid task', () => {
-  const task = parseTaskDefinition({
-    id: 'catalog',
-    title: 'Catalog',
-    goal: 'Migrate catalog',
-    stages: [{ id: 'one', description: 'Implement adapter' }],
-  });
+  const task = parseTaskDefinition(minimalTask());
   assert.equal(task.mode, 'acceptance');
   assert.equal(task.stages.length, 1);
   assert.ok(task.requiredEvidence.includes('status.json'));
+  assert.ok(task.acceptanceCriteria.length >= 1);
 });
 
 test('parseTaskDefinition rejects empty stages', () => {
   assert.throws(
-    () =>
-      parseTaskDefinition({
-        id: 'catalog',
-        title: 'Catalog',
-        goal: 'Migrate catalog',
-        stages: [],
-      }),
+    () => parseTaskDefinition(minimalTask({ stages: [] })),
     (error: unknown) => error instanceof TaskDefinitionError,
   );
 });
@@ -50,12 +41,7 @@ function stubContext(task: TaskDefinition): ExecutionContext {
 
 test('validator ignores agent claimed success and blocks on missing evidence', async () => {
   const validator = new ArtifactPresenceValidator();
-  const task = parseTaskDefinition({
-    id: 'catalog',
-    title: 'Catalog',
-    goal: 'Migrate catalog',
-    stages: [{ id: 'one', description: 'Implement adapter' }],
-  });
+  const task = minimalTask();
   const decision = await validator.validate({
     context: stubContext(task),
     mode: 'acceptance',
@@ -72,13 +58,7 @@ test('validator ignores agent claimed success and blocks on missing evidence', a
 
 test('validator returns BASELINE_BLOCKED_EXPECTED when baseline tests fail with full evidence', async () => {
   const validator = new ArtifactPresenceValidator();
-  const task = parseTaskDefinition({
-    id: 'catalog',
-    title: 'Catalog',
-    goal: 'Migrate catalog',
-    mode: 'baseline',
-    stages: [{ id: 'one', description: 'Implement adapter' }],
-  });
+  const task = minimalTask({ mode: 'baseline' });
   const decision = await validator.validate({
     context: stubContext(task),
     mode: 'baseline',
@@ -93,12 +73,7 @@ test('validator returns BASELINE_BLOCKED_EXPECTED when baseline tests fail with 
 
 test('validator returns PASS only when evidence and tests succeed', async () => {
   const validator = new ArtifactPresenceValidator();
-  const task = parseTaskDefinition({
-    id: 'catalog',
-    title: 'Catalog',
-    goal: 'Migrate catalog',
-    stages: [{ id: 'one', description: 'Implement adapter' }],
-  });
+  const task = minimalTask();
   const decision = await validator.validate({
     context: stubContext(task),
     mode: 'acceptance',

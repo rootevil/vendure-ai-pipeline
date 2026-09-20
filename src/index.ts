@@ -11,20 +11,32 @@ export {
   RunModeSchema,
   RunStatusSchema,
   FailureClassSchema,
+  AllowedToolSchema,
+  TaskRetryPolicySchema,
+  ValidationStepSchema,
   type TaskDefinition,
   type TaskStage,
   type RunMode,
   type RunStatus,
   type FailureClass,
+  type AllowedTool,
+  type TaskRetryPolicy,
+  type ValidationStep,
+  type ValidationStepResult,
   type AttemptRecord,
   type RunResult,
   type RunManifest,
+  type ExecutionReport,
 } from './models/types.js';
 export {
   parseTaskDefinition,
   loadTaskDefinitionFromJsonFile,
   TaskDefinitionError,
 } from './task/task-definition.js';
+export { assertTaskSafe } from './task/task-safety.js';
+export { TaskRunner, type TaskRunnerDependencies } from './execution/task-runner.js';
+export { runValidationSteps, validationStepsPassed } from './execution/validation-steps.js';
+export { writeExecutionReport } from './execution/report.js';
 export {
   createExecutionContext,
   createRunId,

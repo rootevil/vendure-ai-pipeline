@@ -2,13 +2,10 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { createAgentAdapter } from '../agent/agent-factory.js';
 import { loadConfig, ConfigError } from '../config/load-config.js';
-import { PipelineController } from '../controller/pipeline-controller.js';
-import { FileEvidenceCollector } from '../evidence/evidence-collector.js';
+import { TaskRunner } from '../execution/task-runner.js';
 import { createLogger } from '../logging/logger.js';
 import { loadTaskDefinitionFromJsonFile, TaskDefinitionError } from '../task/task-definition.js';
-import { ArtifactPresenceValidator } from '../validator/validator.js';
 
 export interface CliDependencies {
   readonly env?: NodeJS.ProcessEnv;
@@ -22,6 +19,10 @@ function printUsage(stream: NodeJS.WritableStream): void {
     [
       'Usage:',
       '  vendure-pipeline run --task <path-to-task.json>',
+      '',
+      'Flow:',
+      '  TASK → parse/validate → isolated run → agent → changes → validators',
+      '      → evidence → PASS/BLOCK → cleanup → report',
       '',
       'Environment:',
       '  PIPELINE_MODE, PIPELINE_ARTIFACTS_DIR, PIPELINE_WORKSPACE_DIR,',
@@ -81,17 +82,8 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
       stderr,
     });
     const task = loadTaskDefinitionFromJsonFile(resolve(taskPath));
-    const agent = createAgentAdapter({ config });
-
-    const controller = new PipelineController({
-      config,
-      agent,
-      validator: new ArtifactPresenceValidator(),
-      evidence: new FileEvidenceCollector(),
-      logger,
-    });
-
-    const result = await controller.run(task);
+    const runner = new TaskRunner({ config, logger });
+    const result = await runner.execute(task);
     stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return result.exitCode;
   } catch (error) {

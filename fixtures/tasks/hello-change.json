@@ -1,0 +1,66 @@
+{
+  "id": "hello-workspace-change",
+  "title": "Hello workspace change",
+  "goal": "Create a small allowlisted file that proves the agent can modify the isolated workspace safely.",
+  "acceptanceCriteria": [
+    "Agent writes src/hello.txt inside the workspace",
+    "File contains the marker HELLO_PIPELINE",
+    "Independent validator returns PASS only when evidence and validation steps succeed"
+  ],
+  "allowedTools": ["filesystem", "mock"],
+  "timeoutMs": 60000,
+  "retryPolicy": {
+    "maxIdenticalRetries": 2,
+    "maxTotalAttempts": 3
+  },
+  "validationSteps": [
+    {
+      "id": "evidence",
+      "type": "evidence_present"
+    },
+    {
+      "id": "hello-exists",
+      "type": "workspace_file_exists",
+      "path": "src/hello.txt"
+    },
+    {
+      "id": "hello-marker",
+      "type": "workspace_file_contains",
+      "path": "src/hello.txt",
+      "contains": "HELLO_PIPELINE"
+    },
+    {
+      "id": "hello-changed",
+      "type": "changed_files_include",
+      "path": "src/hello.txt"
+    }
+  ],
+  "mode": "acceptance",
+  "sourcePaths": [],
+  "writeAllowlist": ["src"],
+  "requiredEvidence": [
+    "run-manifest.json",
+    "status.json",
+    "stdout.log",
+    "stderr.log",
+    "change-summary.md",
+    "rollback.md",
+    "summary.md"
+  ],
+  "stages": [
+    {
+      "id": "write-hello",
+      "description": "Write src/hello.txt with HELLO_PIPELINE marker",
+      "preconditions": ["Isolated workspace exists", "src is writable"],
+      "actions": ["Create src/hello.txt", "Write HELLO_PIPELINE marker"],
+      "expectedChecks": ["workspace_file_contains src/hello.txt HELLO_PIPELINE"],
+      "cleanup": ["Disposable workspace may be removed after evidence is collected"]
+    }
+  ],
+  "circuitBreakRules": [
+    "Do not use network",
+    "Do not write outside src/",
+    "Do not declare Pipeline PASS or BLOCK"
+  ],
+  "cleanupWorkspace": true
+}

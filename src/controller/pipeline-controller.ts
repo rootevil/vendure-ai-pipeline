@@ -252,6 +252,10 @@ export class PipelineController {
       validatorNotes: decision.notes,
       agentSummary: lastOutcome?.summary ?? null,
       exitCode,
+      changedFiles: lastOutcome?.changedFiles ?? [],
+      validationSteps: [],
+      report: null,
+      workspaceCleaned: false,
     };
   }
 
@@ -293,6 +297,10 @@ export class PipelineController {
       validatorNotes: input.notes,
       agentSummary: input.lastOutcome?.summary ?? null,
       exitCode: input.exitCode,
+      changedFiles: input.lastOutcome?.changedFiles ?? [],
+      validationSteps: [],
+      report: null,
+      workspaceCleaned: false,
     };
   }
 }

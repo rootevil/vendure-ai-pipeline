@@ -17,7 +17,7 @@ import type { PipelineConfig } from '../src/config/load-config.js';
 import { PipelineController } from '../src/controller/pipeline-controller.js';
 import { FileEvidenceCollector } from '../src/evidence/evidence-collector.js';
 import { createLogger } from '../src/logging/logger.js';
-import { parseTaskDefinition } from '../src/task/task-definition.js';
+import { minimalTask } from './helpers/minimal-task.js';
 import { ArtifactPresenceValidator } from '../src/validator/validator.js';
 
 function baseConfig(root: string, overrides: Partial<PipelineConfig> = {}): PipelineConfig {
@@ -38,13 +38,7 @@ function baseConfig(root: string, overrides: Partial<PipelineConfig> = {}): Pipe
   };
 }
 
-const task = parseTaskDefinition({
-  id: 'catalog',
-  title: 'Catalog',
-  goal: 'Migrate catalog',
-  writeAllowlist: ['src'],
-  stages: [{ id: 'one', description: 'Implement adapter' }],
-});
+const task = minimalTask();
 
 test('mock agent success writes changes; validator decides PASS', async () => {
   const root = mkdtempSync(join(tmpdir(), 'agent-success-'));

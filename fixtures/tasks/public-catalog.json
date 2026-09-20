@@ -2,6 +2,23 @@
   "id": "public-catalog-migration",
   "title": "Public catalog migration adapter",
   "goal": "Migrate active legacy catalog records into the public catalog shape without leaking internal fields.",
+  "acceptanceCriteria": [
+    "Active legacy records are migrated",
+    "Inactive records are excluded",
+    "internalNote is never exposed"
+  ],
+  "allowedTools": ["filesystem", "mock", "node_test"],
+  "timeoutMs": 120000,
+  "retryPolicy": {
+    "maxIdenticalRetries": 3,
+    "maxTotalAttempts": 5
+  },
+  "validationSteps": [
+    {
+      "id": "evidence",
+      "type": "evidence_present"
+    }
+  ],
   "mode": "acceptance",
   "sourcePaths": ["evaluation-demo/app/fixtures/legacy-catalog.json"],
   "writeAllowlist": ["evaluation-demo/app/src"],
@@ -28,5 +45,6 @@
     "Do not use network",
     "Do not commit secrets",
     "Stop on path escape outside write allowlist"
-  ]
+  ],
+  "cleanupWorkspace": true
 }

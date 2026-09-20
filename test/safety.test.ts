@@ -6,33 +6,14 @@ import test from 'node:test';
 
 import { createLogger } from '../src/logging/logger.js';
 import type { PipelineConfig } from '../src/config/load-config.js';
-import type { TaskDefinition } from '../src/models/types.js';
+import { minimalTask } from './helpers/minimal-task.js';
 import {
   createExecutionContext,
   scanTextForSafetyViolations,
   SafetyError,
 } from '../src/safety/execution-context.js';
 
-const baseTask: TaskDefinition = {
-  id: 't1',
-  title: 'Test',
-  goal: 'Do a thing',
-  mode: 'acceptance',
-  sourcePaths: [],
-  writeAllowlist: ['src'],
-  requiredEvidence: ['status.json'],
-  stages: [
-    {
-      id: 's1',
-      description: 'stage',
-      preconditions: [],
-      actions: [],
-      expectedChecks: [],
-      cleanup: [],
-    },
-  ],
-  circuitBreakRules: [],
-};
+const baseTask = minimalTask();
 
 function configFor(root: string): PipelineConfig {
   return {
