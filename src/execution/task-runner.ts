@@ -6,6 +6,7 @@ import type { AgentAdapter } from '../agent/agent-adapter.js';
 import type { PipelineConfig } from '../config/load-config.js';
 import { PipelineController } from '../controller/pipeline-controller.js';
 import { FileEvidenceCollector } from '../evidence/evidence-collector.js';
+import { finalizeEvidencePack } from '../evidence/evidence-pack.js';
 import type { Logger } from '../logging/logger.js';
 import type { ExecutionReport, RunResult, TaskDefinition } from '../models/types.js';
 import { createExecutionContext, type ExecutionContext } from '../safety/execution-context.js';
@@ -92,12 +93,32 @@ export class TaskRunner {
     });
 
     flow.push(FLOW_STEPS[6]);
-    // Pipeline status is already decided solely by IndependentValidator.
     const status = result.status;
     const exitCode = result.exitCode;
     const validatorNotes = [...result.validatorNotes];
     const validationSteps = result.validationSteps;
     const validationChecks = result.validationChecks;
+
+    const evidenceManifest = finalizeEvidencePack({
+      runDir: result.artifactDir,
+      task,
+      result: {
+        runId: result.runId,
+        status,
+        exitCode,
+        startedAt: result.startedAt,
+        finishedAt: result.finishedAt,
+        mode: result.mode,
+        taskId: result.taskId,
+        attempts: result.attempts,
+        validatorNotes,
+        agentSummary: result.agentSummary,
+        changedFiles: result.changedFiles,
+        validationChecks,
+        validationSteps,
+      },
+      ...(this.deps.now !== undefined ? { now: this.deps.now } : {}),
+    });
 
     let workspaceCleaned = false;
     if (task.cleanupWorkspace) {
@@ -144,6 +165,7 @@ export class TaskRunner {
       exitCode,
       workspaceCleaned,
       reportPath: report.reportPath,
+      evidenceManifest: join(result.artifactDir, 'evidence-manifest.json'),
     });
 
     return {
@@ -155,6 +177,7 @@ export class TaskRunner {
       workspaceCleaned,
       validationSteps,
       validationChecks,
+      evidenceManifest,
     };
   }
 }

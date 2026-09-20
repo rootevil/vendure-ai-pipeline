@@ -24,10 +24,18 @@ export interface EvidenceCollector {
   writeBundle(input: EvidenceBundleInput): Promise<readonly string[]>;
 }
 
+/**
+ * Writes the early/mid-run evidence under runs/<runId>/.
+ * Final Phase 6 pack (result.json, summary.html, evidence-manifest.json, …)
+ * is completed by finalizeEvidencePack after independent validation.
+ */
 export class FileEvidenceCollector implements EvidenceCollector {
   async writeBundle(input: EvidenceBundleInput): Promise<readonly string[]> {
     const dir = input.context.artifactDir;
     mkdirSync(dir, { recursive: true });
+    mkdirSync(join(dir, 'screenshots'), { recursive: true });
+    mkdirSync(join(dir, 'api-responses'), { recursive: true });
+    mkdirSync(join(dir, 'validation'), { recursive: true });
 
     const manifest: RunManifest = {
       run_id: input.context.runId,
@@ -42,15 +50,43 @@ export class FileEvidenceCollector implements EvidenceCollector {
       status: input.status,
     };
 
+    const executionLog = [
+      `# Execution log for run ${input.context.runId}`,
+      `Started: ${input.context.startedAt}`,
+      `Finished: ${input.finishedAt}`,
+      `Provisional status: ${input.status}`,
+      '',
+      '## Attempts',
+      ...input.attempts.map(
+        (attempt) =>
+          `- #${attempt.attempt} ${attempt.failureClass} claimedSuccess=${String(attempt.agentClaimedSuccess)} — ${attempt.message}`,
+      ),
+      '',
+      '## stdout',
+      input.stdout || '(empty)',
+      '',
+      '## stderr',
+      input.stderr || '(empty)',
+      '',
+    ].join('\n');
+
     const files: Array<[string, string]> = [
       ['run-manifest.json', `${JSON.stringify(manifest, null, 2)}\n`],
       [
         'status.json',
         `${JSON.stringify({ status: input.status, run_id: input.context.runId }, null, 2)}\n`,
       ],
+      ['task.json', `${JSON.stringify(input.context.task, null, 2)}\n`],
       ['stdout.log', input.stdout],
       ['stderr.log', input.stderr],
+      ['execution.log', ensureTrailingNewline(executionLog)],
       ['diff.patch', input.diff],
+      [
+        'git.diff',
+        ensureTrailingNewline(
+          input.diff.length > 0 ? input.diff : 'No git diff captured for this run.',
+        ),
+      ],
       ['change-summary.md', ensureTrailingNewline(input.changeSummary)],
       ['rollback.md', ensureTrailingNewline(input.rollback)],
       ['summary.md', ensureTrailingNewline(input.summary)],

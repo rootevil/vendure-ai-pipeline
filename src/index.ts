@@ -30,6 +30,9 @@ export {
   type RunResult,
   type RunManifest,
   type ExecutionReport,
+  type EvidenceManifest,
+  type EvidenceManifestEntry,
+  type EvidenceFileType,
 } from './models/types.js';
 export {
   parseTaskDefinition,
@@ -98,6 +101,7 @@ export {
   type EvidenceBundleInput,
   FileEvidenceCollector,
 } from './evidence/evidence-collector.js';
+export { finalizeEvidencePack, type FinalizeEvidencePackInput } from './evidence/evidence-pack.js';
 export {
   PipelineController,
   type PipelineControllerDependencies,

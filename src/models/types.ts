@@ -235,6 +235,7 @@ export interface RunResult {
   readonly validationChecks: readonly ValidationCheckResult[];
   readonly report: ExecutionReport | null;
   readonly workspaceCleaned: boolean;
+  readonly evidenceManifest: EvidenceManifest | null;
 }
 
 export interface RunManifest {
@@ -248,4 +249,33 @@ export interface RunManifest {
   readonly attempts: number;
   readonly max_identical_retries: number;
   readonly status: RunStatus;
+}
+
+export type EvidenceFileType =
+  | 'result'
+  | 'task'
+  | 'log'
+  | 'validation'
+  | 'screenshot'
+  | 'api_response'
+  | 'test_result'
+  | 'diff'
+  | 'summary'
+  | 'rollback'
+  | 'manifest'
+  | 'other';
+
+export interface EvidenceManifestEntry {
+  readonly path: string;
+  readonly type: EvidenceFileType;
+  readonly description: string;
+  readonly present: boolean;
+}
+
+export interface EvidenceManifest {
+  readonly runId: string;
+  readonly status: RunStatus;
+  readonly generatedAt: string;
+  readonly runDirectory: string;
+  readonly entries: readonly EvidenceManifestEntry[];
 }

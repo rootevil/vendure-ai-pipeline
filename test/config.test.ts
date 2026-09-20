@@ -6,7 +6,7 @@ import { loadConfig, ConfigError } from '../src/config/load-config.js';
 test('loadConfig applies defaults when env is empty', () => {
   const config = loadConfig({});
   assert.equal(config.mode, 'acceptance');
-  assert.equal(config.artifactsDir, './artifacts');
+  assert.equal(config.artifactsDir, './runs');
   assert.equal(config.workspaceDir, './workspace');
   assert.equal(config.maxIdenticalRetries, 3);
   assert.equal(config.maxTotalAttempts, 5);

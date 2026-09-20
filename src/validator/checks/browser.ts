@@ -1,4 +1,4 @@
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { ValidationCheckResult, ValidationStep } from '../../models/types.js';
@@ -60,7 +60,9 @@ export async function runBrowserPlaywrightCheck(
       failures.push('expectTextContains requires expectSelector');
     }
 
-    const screenshotPath = join(ctx.evidenceDir, step.screenshotName);
+    const screenshotsDir = join(ctx.runDir, 'screenshots');
+    mkdirSync(screenshotsDir, { recursive: true });
+    const screenshotPath = join(screenshotsDir, step.screenshotName);
     const shot = await page.screenshot({ path: screenshotPath, fullPage: true });
     if (shot) {
       writeFileSync(screenshotPath, shot);

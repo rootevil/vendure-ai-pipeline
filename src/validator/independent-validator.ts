@@ -32,6 +32,8 @@ export class IndependentValidator implements Validator {
 
     const evidenceDir = join(input.context.artifactDir, 'validation');
     mkdirSync(evidenceDir, { recursive: true });
+    mkdirSync(join(input.context.artifactDir, 'screenshots'), { recursive: true });
+    mkdirSync(join(input.context.artifactDir, 'api-responses'), { recursive: true });
 
     const allowNetwork = this.deps.allowNetwork ?? input.context.allowNetwork;
     const checkContext = createDefaultCheckContext({
@@ -40,6 +42,7 @@ export class IndependentValidator implements Validator {
       changedFiles: input.changedFiles ?? [],
       requiredEvidence: input.requiredEvidence,
       allowNetwork,
+      runDir: input.context.artifactDir,
       evidenceDir,
       ...(this.deps.fetchHttp !== undefined ? { fetchHttp: this.deps.fetchHttp } : {}),
       ...(this.deps.executeDatabase !== undefined

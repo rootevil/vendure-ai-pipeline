@@ -28,6 +28,7 @@ export async function runValidationSteps(input: {
     changedFiles: input.changedFiles,
     requiredEvidence: input.task.requiredEvidence,
     allowNetwork: input.allowNetwork ?? input.context.allowNetwork,
+    runDir: input.context.artifactDir,
     evidenceDir,
     ...(input.fetchHttp !== undefined ? { fetchHttp: input.fetchHttp } : {}),
     ...(input.executeDatabase !== undefined ? { executeDatabase: input.executeDatabase } : {}),

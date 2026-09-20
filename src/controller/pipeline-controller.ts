@@ -260,6 +260,7 @@ export class PipelineController {
       validationChecks: decision.checks ?? [],
       report: null,
       workspaceCleaned: false,
+      evidenceManifest: null,
     };
   }
 
@@ -306,6 +307,7 @@ export class PipelineController {
       validationChecks: [],
       report: null,
       workspaceCleaned: false,
+      evidenceManifest: null,
     };
   }
 }

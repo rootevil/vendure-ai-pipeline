@@ -1,3 +1,6 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { ValidationCheckResult, ValidationStep } from '../../models/types.js';
 import { createCheckResult } from '../check-result.js';
 import type { CheckRunnerContext } from '../check-types.js';
@@ -40,7 +43,7 @@ export async function runHttpResponseCheck(
     const bodyOk =
       step.expectBodyContains === undefined || response.bodyText.includes(step.expectBodyContains);
     const passed = statusOk && bodyOk;
-    return createCheckResult({
+    const result = createCheckResult({
       checkName: step.id,
       status: passed ? 'PASS' : 'FAIL',
       expected,
@@ -50,6 +53,15 @@ export async function runHttpResponseCheck(
       evidenceFileName: evidenceFile,
       ...(ctx.now !== undefined ? { now: ctx.now } : {}),
     });
+    writeApiResponse(ctx, step.id, {
+      kind: 'http_response',
+      method: step.method,
+      url: step.url,
+      status: response.status,
+      body: response.bodyText,
+      check: result,
+    });
+    return result;
   } catch (error) {
     return createCheckResult({
       checkName: step.id,
@@ -62,4 +74,10 @@ export async function runHttpResponseCheck(
       ...(ctx.now !== undefined ? { now: ctx.now } : {}),
     });
   }
+}
+
+function writeApiResponse(ctx: CheckRunnerContext, id: string, payload: unknown): void {
+  const dir = join(ctx.runDir, 'api-responses');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${id}.json`), `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
 }

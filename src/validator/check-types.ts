@@ -44,6 +44,7 @@ export interface CheckRunnerContext {
   readonly changedFiles: readonly string[];
   readonly requiredEvidence: readonly string[];
   readonly allowNetwork: boolean;
+  readonly runDir: string;
   readonly evidenceDir: string;
   readonly fetchHttp: HttpFetcher;
   readonly executeDatabase: DatabaseExecutor;
