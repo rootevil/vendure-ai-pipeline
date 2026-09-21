@@ -186,6 +186,11 @@ export {
   buildCheckoutJourneyActions,
   CHECKOUT_SCREENSHOTS,
 } from './scenarios/browser-checkout/journey.js';
+export {
+  buildPostBrowserGraphqlSteps,
+  DEMO_ORDER_CODE,
+  DEMO_CUSTOMER_EMAIL,
+} from './scenarios/browser-checkout/graphql-checks.js';
 export { validateRunDir, type ValidateRunDirResult } from './validator/validate-run-dir.js';
 export {
   createWorkspaceCheckpoint,

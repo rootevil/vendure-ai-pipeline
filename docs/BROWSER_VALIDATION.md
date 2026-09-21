@@ -44,6 +44,16 @@ artifacts/<runId>/validator-verdict.json
 
 `playwright-results.json` records each journey step (goto/click/assert), status, and screenshot paths.
 
+## Dual evidence (required)
+
+After the browser journey, the same demo runs **independent** Shop API checks:
+
+```text
+GraphQL → query product → query customer/order → verify expected state
+```
+
+See [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md). Browser screenshots alone never grant PASS.
+
 ## Check types
 
 | Type | Use |

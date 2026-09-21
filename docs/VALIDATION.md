@@ -43,6 +43,8 @@ Client-facing artifact: `artifacts/<runId>/validator-verdict.json` — built onl
 
 If any critical assertion fails, overall `status` is `BLOCK` regardless of the agent self-report.
 
+**Dual evidence:** browser screenshots alone are not enough. After Playwright, the checkout demo also runs independent GraphQL/API product and order queries — see [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md).
+
 ## Status vocabulary
 
 | Status | Meaning | Typical process exit |

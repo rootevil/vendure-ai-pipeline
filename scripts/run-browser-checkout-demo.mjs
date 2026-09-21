@@ -15,7 +15,15 @@ const summary = {
   runId: result.runId,
   artifactDir: result.artifactDir,
   baseUrl,
-  screenshots: screenshots.map((name) => `${result.artifactDir}/screenshots/${name}`),
+  evidence: {
+    browser: screenshots.map((name) => `${result.artifactDir}/screenshots/${name}`),
+    backend: [
+      `${result.artifactDir}/api-responses/graphql-query-product.json`,
+      `${result.artifactDir}/api-responses/graphql-query-order.json`,
+      `${result.artifactDir}/api-responses/graphql-query-customer-orders.json`,
+      `${result.artifactDir}/api-responses/api-order-state.json`,
+    ],
+  },
   playwrightResults: `${result.artifactDir}/playwright-results.json`,
   validatorVerdict: `${result.artifactDir}/validator-verdict.json`,
   summaryHtml: `${result.artifactDir}/summary.html`,

@@ -12,6 +12,11 @@ import {
   type FakeJourneyPageState,
 } from '../../validator/browser-launcher.js';
 import { startBrowserCheckoutDemoStorefront, type DemoStorefrontHandle } from './demo-storefront.js';
+import {
+  buildPostBrowserGraphqlSteps,
+  DEMO_CUSTOMER_EMAIL,
+  DEMO_ORDER_CODE,
+} from './graphql-checks.js';
 import { buildCheckoutJourneyStep, CHECKOUT_SCREENSHOTS } from './journey.js';
 
 export interface BrowserCheckoutScenarioOptions {
@@ -30,16 +35,12 @@ export interface BrowserCheckoutScenarioResult {
 }
 
 /**
- * Visually obvious Playwright browser-validation demo.
+ * Dual-evidence checkout demo:
  *
- *   Open storefront → Find product → Open product → Add to cart → Checkout → Verify
+ *   1) Playwright browser journey (screenshots)
+ *   2) Independent GraphQL/API product + order queries (api-responses/)
  *
- * Captures:
- *   screenshots/01-home.png
- *   screenshots/02-product.png
- *   screenshots/03-cart.png
- *   screenshots/04-checkout.png
- *   playwright-results.json
+ * Browser evidence alone is not enough — backend state must match.
  */
 export async function runBrowserCheckoutScenario(
   options: BrowserCheckoutScenarioOptions = {},
@@ -54,7 +55,11 @@ export async function runBrowserCheckoutScenario(
 
   let server: DemoStorefrontHandle | null = null;
   try {
-    server = await startBrowserCheckoutDemoStorefront({ productName });
+    server = await startBrowserCheckoutDemoStorefront({
+      productName,
+      orderCode: DEMO_ORDER_CODE,
+      customerEmail: DEMO_CUSTOMER_EMAIL,
+    });
     const task = buildBrowserCheckoutTask({
       baseUrl: server.baseUrl,
       productName,
@@ -133,21 +138,30 @@ export function buildBrowserCheckoutTask(input: {
     startUrl: input.baseUrl,
     productName,
   });
+  const graphqlSteps = buildPostBrowserGraphqlSteps({
+    baseUrl: input.baseUrl,
+    productName,
+    orderCode: DEMO_ORDER_CODE,
+    customerEmail: DEMO_CUSTOMER_EMAIL,
+  });
 
   return {
     id: 'browser-checkout-demo',
-    title: 'Browser checkout validation demo',
-    goal: 'Prove Playwright can walk storefront → product → cart → checkout with numbered screenshots',
+    title: 'Browser + GraphQL checkout validation demo',
+    goal: 'Prove dual evidence: Playwright screenshots plus independent Shop API product/order queries',
     acceptanceCriteria: [
       'Storefront home loads',
       'Product page is reachable from the catalog',
       'Add to cart reaches the cart page',
       'Checkout shows order confirmation',
+      'GraphQL product query returns the expected product',
+      'GraphQL order/customer queries confirm backend order state',
     ],
     allowedTools: ['filesystem', 'mock'],
     timeoutMs: 90_000,
     retryPolicy: { maxIdenticalRetries: 1, maxTotalAttempts: 2 },
-    validationSteps: [{ id: 'evidence', type: 'evidence_present' }, journey],
+    // Browser first, then independent GraphQL/API — never trust UI alone.
+    validationSteps: [{ id: 'evidence', type: 'evidence_present' }, journey, ...graphqlSteps],
     mode: 'acceptance',
     sourcePaths: [],
     writeAllowlist: ['src', 'data'],
@@ -176,10 +190,23 @@ export function buildBrowserCheckoutTask(input: {
         expectedChecks: ['browser_journey'],
         cleanup: ['Disposable workspace may be removed after evidence is collected'],
       },
+      {
+        id: 'graphql-api-validation',
+        description: 'Independent Shop API queries after browser validation',
+        preconditions: ['Browser journey completed or skipped only if blocked earlier'],
+        actions: [
+          'GraphQL query product',
+          'GraphQL query customer/order',
+          'Verify expected backend state via API',
+        ],
+        expectedChecks: ['graphql_request', 'http_response'],
+        cleanup: ['API response payloads retained under api-responses/'],
+      },
     ],
     circuitBreakRules: [
       'Agent claimed success never grants PASS',
-      'Playwright journey evidence decides PASS or BLOCK',
+      'Browser screenshots alone never grant PASS without GraphQL/API evidence',
+      'Playwright + GraphQL evidence together decide PASS or BLOCK',
     ],
     cleanupWorkspace: input.keepWorkspace !== true,
   };

@@ -192,7 +192,7 @@ npm run scenario:browser-checkout
 # Real Chromium screenshots: npm run scenario:browser-checkout -- --real-browser
 ```
 
-Expect numbered shots `01-home.png` … `04-checkout.png` plus `playwright-results.json`. Details: [BROWSER_VALIDATION.md](./BROWSER_VALIDATION.md).
+Expect numbered shots `01-home.png` … `04-checkout.png`, `playwright-results.json`, and GraphQL/API payloads under `api-responses/`. Details: [BROWSER_VALIDATION.md](./BROWSER_VALIDATION.md), [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md).
 
 ### 8. Demonstrate one controlled failure
 

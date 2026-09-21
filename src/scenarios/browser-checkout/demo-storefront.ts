@@ -1,4 +1,4 @@
-import { createServer, type Server } from 'node:http';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 
 export interface DemoStorefrontHandle {
   readonly baseUrl: string;
@@ -6,53 +6,72 @@ export interface DemoStorefrontHandle {
   close(): Promise<void>;
 }
 
+export interface DemoCatalogProduct {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly priceWithTax: number;
+}
+
+export interface DemoOrder {
+  readonly id: string;
+  readonly code: string;
+  readonly state: string;
+  readonly customerEmail: string;
+  readonly lines: ReadonlyArray<{
+    readonly productVariant: { readonly name: string; readonly sku: string };
+    readonly quantity: number;
+  }>;
+}
+
 /**
- * Visually obvious mini storefront for Playwright browser-validation demos.
+ * Visually obvious mini storefront + Vendure-shaped Shop API for dual evidence demos.
  *
- * Routes:
- *   /              home / product list
- *   /product/:slug product detail + Add to cart
- *   /cart          cart
- *   /checkout      checkout → confirmation
+ * HTML routes (browser evidence):
+ *   /  /product/:slug  /cart  /checkout
+ *
+ * Backend routes (GraphQL/API evidence):
+ *   POST /shop-api   — product + customer/order queries
+ *   GET  /api/products
+ *   GET  /api/orders/:code
  */
 export async function startBrowserCheckoutDemoStorefront(input?: {
   readonly host?: string;
   readonly productName?: string;
+  readonly orderCode?: string;
+  readonly customerEmail?: string;
 }): Promise<DemoStorefrontHandle> {
   const host = input?.host ?? '127.0.0.1';
   const productName = input?.productName ?? 'Soft Pink Almond';
   const productSlug = 'soft-pink-almond';
+  const orderCode = input?.orderCode ?? 'ORD-DEMO-1';
+  const customerEmail = input?.customerEmail ?? 'demo@example.com';
+
+  const product: DemoCatalogProduct = {
+    id: '1',
+    name: productName,
+    slug: productSlug,
+    priceWithTax: 2400,
+  };
+
+  // Backend state exists independently of the HTML journey — GraphQL verifies it after Playwright.
+  const orders: DemoOrder[] = [
+    {
+      id: '42',
+      code: orderCode,
+      state: 'PaymentSettled',
+      customerEmail,
+      lines: [
+        {
+          productVariant: { name: productName, sku: productSlug },
+          quantity: 1,
+        },
+      ],
+    },
+  ];
 
   const server: Server = createServer((req, res) => {
-    const url = new URL(req.url ?? '/', `http://${host}`);
-    const path = url.pathname;
-
-    if (path === '/health') {
-      writeJson(res, 200, { ok: true, service: 'browser-checkout-demo' });
-      return;
-    }
-
-    if (path === '/') {
-      writeHtml(res, homePage(productName, productSlug));
-      return;
-    }
-
-    if (path === `/product/${productSlug}`) {
-      writeHtml(res, productPage(productName, productSlug));
-      return;
-    }
-
-    if (path === '/cart') {
-      writeHtml(res, cartPage(productName));
-      return;
-    }
-
-    if (path === '/checkout') {
-      writeHtml(res, checkoutPage(productName));
-      return;
-    }
-
-    writeJson(res, 404, { error: 'not_found' });
+    void handleRequest(req, res, { product, orders, productName, productSlug, customerEmail });
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -74,6 +93,166 @@ export async function startBrowserCheckoutDemoStorefront(input?: {
         server.close((error) => (error ? reject(error) : resolve()));
       }),
   };
+}
+
+async function handleRequest(
+  req: IncomingMessage,
+  res: ServerResponse,
+  state: {
+    readonly product: DemoCatalogProduct;
+    readonly orders: DemoOrder[];
+    readonly productName: string;
+    readonly productSlug: string;
+    readonly customerEmail: string;
+  },
+): Promise<void> {
+  try {
+    const host = req.headers.host ?? '127.0.0.1';
+    const url = new URL(req.url ?? '/', `http://${host}`);
+    const path = url.pathname;
+
+    if (path === '/health') {
+      writeJson(res, 200, { ok: true, service: 'browser-checkout-demo' });
+      return;
+    }
+
+    if (path === '/shop-api' && req.method === 'POST') {
+      const body = await readBody(req);
+      writeJson(res, 200, handleShopApi(body, state));
+      return;
+    }
+
+    if (path === '/api/products' && req.method === 'GET') {
+      writeJson(res, 200, { items: [state.product], totalItems: 1 });
+      return;
+    }
+
+    if (path.startsWith('/api/orders/') && req.method === 'GET') {
+      const code = decodeURIComponent(path.slice('/api/orders/'.length));
+      const order = state.orders.find((item) => item.code === code);
+      if (!order) {
+        writeJson(res, 404, { error: 'order_not_found' });
+        return;
+      }
+      writeJson(res, 200, order);
+      return;
+    }
+
+    if (path === '/') {
+      writeHtml(res, homePage(state.productName, state.productSlug));
+      return;
+    }
+
+    if (path === `/product/${state.productSlug}`) {
+      writeHtml(res, productPage(state.productName, state.productSlug));
+      return;
+    }
+
+    if (path === '/cart') {
+      writeHtml(res, cartPage(state.productName));
+      return;
+    }
+
+    if (path === '/checkout') {
+      writeHtml(res, checkoutPage(state.productName, state.customerEmail));
+      return;
+    }
+
+    writeJson(res, 404, { error: 'not_found' });
+  } catch (error) {
+    writeJson(res, 500, {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
+function handleShopApi(
+  body: string,
+  state: {
+    readonly product: DemoCatalogProduct;
+    readonly orders: DemoOrder[];
+    readonly customerEmail: string;
+  },
+): unknown {
+  let query = '';
+  try {
+    query = String((JSON.parse(body) as { query?: string }).query ?? '');
+  } catch {
+    return { errors: [{ message: 'Invalid JSON body' }] };
+  }
+
+  const normalized = query.replace(/\s+/g, ' ');
+
+  if (/product\s*\(/i.test(normalized) || /products\s*\{/i.test(normalized)) {
+    if (/product\s*\(/i.test(normalized)) {
+      return {
+        data: {
+          product: {
+            id: state.product.id,
+            name: state.product.name,
+            slug: state.product.slug,
+            variants: [{ priceWithTax: state.product.priceWithTax }],
+          },
+        },
+      };
+    }
+    return {
+      data: {
+        products: {
+          totalItems: 1,
+          items: [
+            {
+              id: state.product.id,
+              name: state.product.name,
+              slug: state.product.slug,
+            },
+          ],
+        },
+      },
+    };
+  }
+
+  if (/activeOrder/i.test(normalized) || /order\s*\(/i.test(normalized)) {
+    const codeMatch = normalized.match(/code\s*:\s*"([^"]+)"/i);
+    const requestedCode = codeMatch?.[1];
+    const order =
+      requestedCode !== undefined
+        ? state.orders.find((item) => item.code === requestedCode)
+        : state.orders[0];
+    if (!order) {
+      return { data: { activeOrder: null, order: null } };
+    }
+    const payload = {
+      id: order.id,
+      code: order.code,
+      state: order.state,
+      lines: order.lines,
+    };
+    if (/activeOrder/i.test(normalized)) {
+      return { data: { activeOrder: payload } };
+    }
+    return { data: { order: payload } };
+  }
+
+  if (/customer/i.test(normalized)) {
+    return {
+      data: {
+        activeCustomer: {
+          id: 'cust-1',
+          emailAddress: state.customerEmail,
+          orders: {
+            items: state.orders.map((order) => ({
+              id: order.id,
+              code: order.code,
+              state: order.state,
+            })),
+          },
+        },
+      },
+    };
+  }
+
+  return { errors: [{ message: 'Unsupported GraphQL query for demo shop-api' }] };
 }
 
 function homePage(productName: string, slug: string): string {
@@ -126,7 +305,7 @@ function cartPage(productName: string): string {
   );
 }
 
-function checkoutPage(productName: string): string {
+function checkoutPage(productName: string, customerEmail: string): string {
   return pageShell(
     'Demo Store — Checkout',
     `
@@ -135,7 +314,7 @@ function checkoutPage(productName: string): string {
     <h1 data-testid="checkout-heading">Checkout</h1>
     <p data-testid="checkout-item">Order: ${escapeHtml(productName)}</p>
     <form id="checkout-form" data-testid="checkout-form" onsubmit="event.preventDefault(); document.getElementById('confirmation').hidden=false; this.hidden=true;">
-      <label>Email <input data-testid="email" name="email" type="email" value="demo@example.com" /></label>
+      <label>Email <input data-testid="email" name="email" type="email" value="${escapeHtml(customerEmail)}" /></label>
       <button type="submit" data-testid="place-order">Place order</button>
     </form>
     <div id="confirmation" data-testid="order-confirmation" hidden>
@@ -177,18 +356,23 @@ ${body}
 </html>`;
 }
 
-function writeHtml(res: import('node:http').ServerResponse, html: string): void {
+function writeHtml(res: ServerResponse, html: string): void {
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
   res.end(html);
 }
 
-function writeJson(
-  res: import('node:http').ServerResponse,
-  status: number,
-  payload: unknown,
-): void {
+function writeJson(res: ServerResponse, status: number, payload: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8' });
   res.end(`${JSON.stringify(payload)}\n`);
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
+  });
 }
 
 function escapeHtml(value: string): string {
