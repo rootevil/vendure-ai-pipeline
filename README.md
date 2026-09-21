@@ -1,76 +1,78 @@
 # vendure-ai-pipeline
 
-Contractor-owned workspace for a reusable autonomous engineering and validation pipeline targeting Vendure.
+Contractor Phase 1 **autonomous engineering and validation pipeline skeleton** for Vendure-related work.
 
-## Phase 1 skeleton
+It accepts a bounded task, runs an agent inside an isolated workspace, collects evidence, and lets an **independent validator** decide `PASS` / `BLOCK`. It is **not** the full client Vendure Batch 1+2 migration, and it does **not** claim production or minipc access.
 
-TypeScript control plane with swappable agent and validator interfaces. Default agent mode is `mock` (no LLM). Set `PIPELINE_AGENT_MODE=openhands` to invoke the OpenHands CLI. The **validator**, not the agent, decides `PASS` / `BLOCK`.
+## What is implemented
 
-```bash
-npm install
-npm run format
-npm run typecheck
-npm test
-npm run pipeline -- run --task fixtures/tasks/hello-change.json
-```
+| Capability | Status |
+| --- | --- |
+| Task JSON schema + CLI (`vendure-pipeline run`) | Yes |
+| Markdown task card for `evaluation-demo/task.md` (maps to catalog scenario) | Yes |
+| Mock agent + OpenHands CLI adapter | Yes (default = mock) |
+| Independent validation (health/HTTP/GraphQL/browser/DB/path checks) | Yes |
+| Evidence packs under `artifacts/<runId>/` | Yes |
+| Bounded retries + circuit breaker | Yes |
+| Docker Compose stack (pipeline + Postgres + Redis, internal network) | Yes |
+| Public catalog E2E scenario | Yes (scenario agent applies published reference adapter) |
+| Nail-patterns path-invariant scenario | Yes |
+| Recoverable / unrecoverable failure demos | Yes |
+| GitHub Actions `workflow_dispatch` | Yes (allowlisted task paths) |
+| Validator CLI `packages/validator/bin/validate.mjs` | Yes |
 
-For real Playwright browser checks: `npx playwright install chromium` (also attempted in `postinstall`; set `PIPELINE_SKIP_PLAYWRIGHT_INSTALL=1` to skip).
+## What is not implemented
 
-## Public Vendure catalog scenario (Phase 8)
+- Full OpenHands multi-role team / Buzz orchestration
+- Live Vendure Shop/Admin + Stripe/Mailpit long-chain E2E
+- Cryptographic evidence signing
+- Hard sandbox for OpenHands (seccomp / nested VM)
+- Private client repos, production, or unrestricted minipc/SSH
 
-Reproducible end-to-end demo using only `evaluation-demo/` (not the full client migration):
+See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) and [docs/SECURITY_LIMITATIONS.md](docs/SECURITY_LIMITATIONS.md).
 
-```bash
-npm run scenario:public-catalog
-# or: ./scripts/start.sh --task evaluation-demo/task.md
-```
+## Handover path (new developer)
 
-See [docs/PUBLIC_CATALOG_SCENARIO.md](docs/PUBLIC_CATALOG_SCENARIO.md).
-
-## Nail-patterns path invariant (P1-10)
-
-```bash
-npm run scenario:nail-patterns
-```
-
-## Failure demonstration (Phase 9)
-
-```bash
-npm run scenario:failure-recoverable    # detect → repair → PASS
-npm run scenario:failure-unrecoverable  # unsafe → BLOCK, no repair
-```
-
-See [docs/FAILURE_DEMO.md](docs/FAILURE_DEMO.md).
-
-## Independent validator CLI
+1. Clone → install → configure — [docs/QUICKSTART.md](docs/QUICKSTART.md)  
+2. Environment variables — [docs/CONFIGURATION.md](docs/CONFIGURATION.md)  
+3. Docker stack — [docs/DOCKER_SETUP.md](docs/DOCKER_SETUP.md)  
+4. Run pipeline / demos — QUICKSTART § Pipeline & demos  
+5. Evidence & PASS/BLOCK — [docs/VALIDATION.md](docs/VALIDATION.md)  
+6. Failure/recovery — QUICKSTART § Failure demos + [docs/FAILURE_DEMO.md](docs/FAILURE_DEMO.md)  
+7. Architecture — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)  
+8. Stuck? — [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
 ```bash
-node packages/validator/bin/validate.mjs --run-dir artifacts/<run_id>
-```
-
-Configuration is via environment variables (see `.env.example`). Do not commit secrets.
-
-## Isolated Docker environment
-
-```bash
-./scripts/start.sh
+git clone <this-repo>
+cd vendure-ai-pipeline
+npm ci
+cp .env.example .env          # optional local overrides; never commit secrets
+./scripts/start.sh            # Docker stack (Colima: see DOCKER_SETUP)
 ./scripts/check.sh
-./scripts/stop.sh
-./scripts/cleanup.sh   # wipe disposable volumes for a fresh state
+npm run scenario:public-catalog
+ls artifacts/                 # or temp path printed by the scenario
+node packages/validator/bin/validate.mjs --run-dir artifacts/<run_id>
+./scripts/cleanup.sh
 ```
-
-See [docs/DOCKER_SETUP.md](docs/DOCKER_SETUP.md).
 
 ## Layout
 
-- `src/` — pipeline controller, task schema, execution context, agent/validator interfaces, retry policy, evidence collector, CLI
-- `packages/` — Architecture package surfaces (`validator` CLI, plus evidence/safety/scenario/agent-adapter shims)
-- `test/` — unit tests for core logic
-- `fixtures/tasks/` — sample machine-readable task definitions
-- `docker/` — Dockerfile + Compose stack (Postgres, Redis, pipeline runner)
-- `scripts/` — start/stop/check/cleanup helpers
-- `docs/` — client briefing and architecture notes
-- `evaluation-demo/` — mirrored public demo (reference only)
-- `.github/workflows/pipeline.yml` — `workflow_dispatch` entry
+```text
+src/                  Control plane (controller, agent, validator, evidence, safety)
+packages/             Thin package surfaces; validator CLI is the main entry
+fixtures/tasks/       Sample JSON tasks
+docker/               Dockerfile + Compose
+scripts/              start/stop/check/cleanup, scenario runners
+evaluation-demo/      Public demo package (baseline incomplete catalog.mjs)
+artifacts/            Default evidence root (gitignored)
+.github/workflows/    workflow_dispatch
+docs/                 Handover + client briefing docs
+```
 
-Do not connect this repository to production, private client systems, or unrestricted minipc access.
+## Security boundary
+
+Do not connect this repository to production, private client credentials, or unrestricted minipc/SSH. Default agent mode is `mock` (no LLM). Inject any OpenHands/LLM credentials at runtime only.
+
+## License / ownership
+
+Contractor-owned Phase 1 workspace. Client contract language lives under `docs/CONTRACT_*.md` and related briefing files for reference; Phase 1 delivery boundary is `docs/PHASE1_SCOPE.md`.

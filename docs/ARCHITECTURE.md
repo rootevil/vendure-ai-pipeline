@@ -1,172 +1,120 @@
-# Architecture
+# Architecture (as-built Phase 1)
 
-Senior-architect proposal for a reusable autonomous engineering and validation pipeline. **Design only — no implementation in this document’s phase.**
+This document describes the **implemented** Phase 1 control plane. Earlier design notes that assumed `network_mode: none` or a full monorepo under `packages/` are updated here to match the repo.
 
-Guiding constraints: Docker-first, isolated execution, bounded retries, independent validation, evidence collection, safe failure/stop, no production access, no secrets in git, **validator (not the AI agent) decides PASS/BLOCK**.
+Guiding rules still hold: Docker-first isolation for the stack, bounded retries, independent validation, evidence over narration, no production access, **validator (not the agent) decides PASS/BLOCK**.
 
-Reuse-first: prefer OpenHands (or equivalent maintained OSS agent runtime), Playwright, Docker/Compose, GitHub Actions, Node test runner, and the public demo’s evidence shape. Do not rebuild agent frameworks, browsers, or orchestrators from scratch.
+## 1. Control loop
 
-## 1. Design principles
+```text
+1. Ingress
+     CLI: vendure-pipeline run --task <task.json|task.md>
+     or scenario scripts / start.sh --task …
+2. Safety preflight
+     Zod task parse + assertTaskSafe (allowlist, forbidden tools, URL/path rules)
+3. Isolated workspace
+     workspace/<runId>/ + artifacts/<runId>/
+     optional workspace-checkpoint/ before agent
+4. Agent (bounded)
+     mock | openhands | scenario-specific adapters
+     retries via RetryPolicy + circuit breaker
+5. Independent validator
+     runs validationSteps; ignores agent claimedSuccess
+6. Evidence pack
+     status, logs (redacted), diffs, validation JSON, summary.html, manifest
+7. Cleanup
+     optional workspace delete; Docker volumes via cleanup.sh
+```
 
-1. **Thin control plane, thick reuse.** Own only identity, scope, permissions, retries, evidence integrity, and the validator. Delegate coding/debugging to OpenHands (or peer).
-2. **Evidence over narration.** Artifacts and exit codes decide outcomes.
-3. **Isolation by default.** Each run gets a disposable workspace and a container network policy (none or explicit allowlist).
-4. **Fail closed.** Missing identity, secrets policy violation, path escape, or exhausted retries → `BLOCK` or `AUTH_REQUIRED`, never silent continue.
-5. **Public demo is the contract shape.** Extend `evaluation-demo` patterns (`run-manifest`, `status.json`, baseline vs acceptance) rather than inventing a parallel evidence language.
+## 2. Components (where they live)
 
-## 2. Proposed components
-
-| Component | Responsibility | Reuse |
+| Component | Location | Notes |
 | --- | --- | --- |
-| **Task Ingress** | Accept NL task card + pinned revisions; write `scenario.json` | Schema inspired by `evaluation-demo/task.md` |
-| **Scenario Compiler** | Expand goal → stages, assertions, evidence requirements, cleanup, circuit-break | Small TS module; optional LLM assist with schema validation |
-| **Safety Kernel** | Path allowlist, secret redaction, irreversible-op gate, retry budget | Custom thin code (required) |
-| **Agent Runtime Adapter** | Drive coding/debug loop inside workspace | **OpenHands** (preferred) or documented alternative |
-| **Tool Adapters** | Git, filesystem, Node test, later GraphQL/Playwright/Postgres | OSS CLIs/MCPs; mount only when scenario requests capability |
-| **Runner** | Build/run/cleanup via Docker Compose | Extend demo `Dockerfile` / `compose.yaml` (`network_mode: none`) |
-| **Evidence Relayer** | Collect logs, diff, screenshots, manifests into `artifacts/<run_id>/` | Pattern from `evaluation-demo/scripts/verify.mjs` |
-| **Independent Validator** | Read artifacts + scenario; emit `PASS` / `BLOCK` / `BASELINE_BLOCKED_EXPECTED` | Evolve demo verifier into standalone package |
-| **Control Surface** | `workflow_dispatch` + local CLI | GitHub Actions |
+| Task schema / safety | `src/task/` | JSON Zod schema; `task.md` → companion JSON for known cards |
+| Pipeline controller | `src/controller/` | Agent loop, retries, handoff to validator |
+| Task runner / CLI | `src/execution/`, `src/cli/` | End-to-end flow + `npm run pipeline` |
+| Agents | `src/agent/` | `mock`, `openhands`, `noop` |
+| Scenario agents | `src/scenarios/*/` | Catalog / nail-patterns / failure demos |
+| Validator | `src/validator/` | Independent checks |
+| Validator CLI | `packages/validator/bin/validate.mjs` | Artifact-only re-check |
+| Evidence | `src/evidence/` | Bundle + finalize pack |
+| Safety / redaction | `src/safety/` | Paths, checkpoints, secret redaction, URL allowlists |
+| Retry | `src/retry/` | Failure kinds, budgets, circuit breaker |
+| Docker runner | `docker/`, `scripts/docker-stack.sh` | Compose: pipeline + postgres + redis |
+| GHA | `.github/workflows/pipeline.yml` | `workflow_dispatch`, allowlisted tasks |
 
-### What we deliberately do not build in Phase 1
+`packages/{scenario,safety,evidence,agent-adapter}` are **layout shims** for the Architecture package map; implementation code is under `src/`.
 
-- Custom multi-agent “Buzz” message bus (optional Phase 2; start with single OpenHands session + branch jobs later)
-- Full MCP catalog from the client research list
-- Production deployers, minipc remote-control shells, HyperQueue resource brokers
-
-## 3. Repository structure (target)
+## 3. Repository layout
 
 ```text
 vendure-ai-pipeline/
-  docs/                          # Client briefing + this architecture set
-  evaluation-demo/               # Mirrored public demo (reference + first gate)
-  docker/
-    Dockerfile
-    compose.yaml
-  packages/
-    scenario/                    # Task card → scenario.json
-    safety/                      # Path/secret/retry guards
-    evidence/                    # Bundle writers (manifest, status, rollback)
-    validator/                   # Independent PASS/BLOCK (no LLM)
-    agent-adapter/               # OpenHands (or peer) invocation
-  scripts/
-    start.sh
-    stop.sh
-    check.sh
-    cleanup.sh
-  .github/workflows/
-    pipeline.yml                 # workflow_dispatch
-  .env.example
-  README.md
+  src/                 # Control plane implementation
+  packages/validator/  # validate.mjs + restore-checkpoint.mjs
+  fixtures/tasks/      # Sample JSON tasks
+  docker/              # Dockerfile + compose.yaml (internal network)
+  scripts/             # start/stop/check/cleanup + scenario runners
+  evaluation-demo/     # Public demo (incomplete catalog.mjs in tree)
+  artifacts/           # Default evidence (gitignored)
+  test/
+  docs/
+  .github/workflows/pipeline.yml
 ```
 
-Phase 0 contains `docs/` + mirrored `evaluation-demo/` only. Packages above are created in later milestones.
+## 4. Isolation model
 
-## 4. Execution flow
+| Surface | Isolation |
+| --- | --- |
+| Compose stack | `internal: true` bridge — no container egress, no published ports |
+| Host CLI / `start.sh --task` | Process on host; disposable workspace dir; SSRF allowlist for validator HTTP |
+| GHA | `ubuntu-latest`; task path allowlist; default `PIPELINE_ALLOW_NETWORK=false` |
 
-```text
-1. Start (CLI or workflow_dispatch)
-     inputs: task card path, git SHA pins, mode (baseline|acceptance|full)
-2. Safety Kernel preflight
-     identity, workspace, disk budget, network policy, secret scan of env
-3. Scenario Compiler
-     emit scenario.json + evidence checklist
-4. Provision Runner
-     docker compose up; mount empty workspace; checkout pinned sources
-5. Agent Runtime (bounded)
-     read scenario → edit allowlisted files → run tests → on failure:
-       classify → retry if recoverable and budget remains → else stop
-6. Evidence Relayer
-     write artifacts/<run_id>/{run-manifest.json,status.json,stdout.log,
-       stderr.log,diff.patch,change-summary.md,rollback.md,...}
-7. Independent Validator
-     compare artifacts to scenario checklist
-     decide PASS | BLOCK | BASELINE_BLOCKED_EXPECTED
-8. Cleanup
-     stop containers; wipe workspace; retain artifacts only
-```
-
-Critical rule: step 5 may write a narrative summary, but step 7 **overwrites** any agent-claimed success. If required files are missing, result is `BLOCK`.
+Compose is **not** `network_mode: none`; services can talk to each other (Postgres/Redis/pipeline). See [DOCKER_SETUP.md](./DOCKER_SETUP.md) and [SECURITY_LIMITATIONS.md](./SECURITY_LIMITATIONS.md).
 
 ## 5. Validation model
 
 | Mode | Meaning | Exit |
 | --- | --- | --- |
-| `baseline` | Starter/incomplete state must fail acceptance assertions | 0 if `BASELINE_BLOCKED_EXPECTED`, else 1 |
-| `acceptance` | All scenario assertions pass with required evidence | 0 if `PASS`, else 1 |
-| `full` (Phase 2+) | Browser/API/DB evidence required per scenario | same |
+| `acceptance` | Checks must pass | 0 if `PASS`, else 1 |
+| `baseline` | Starter should fail acceptance | 0 if `BASELINE_BLOCKED_EXPECTED`, else 1 |
+| `full` | Reserved / same exit rules; not a separate long-chain gate in Phase 1 | — |
 
-Validator inputs: scenario.json, test exit codes, required artifact presence/hashes, optional schema checks. Validator must not call the LLM.
+Check types implemented: `evidence_present`, workspace file checks, `application_health`, `http_response`, `graphql_request`, `browser_playwright`, `database_state` (json_fixture / optional postgres), `path_invariant`, `redis_ping`, `postgres_ready`.
 
-## 6. Retry and safe-stop policy
+HTTP destinations: loopback + `PIPELINE_NETWORK_ALLOWLIST`. Stack probes: `PIPELINE_STACK_HOST_ALLOWLIST`.
 
-Recoverable (retry with budget, default N=3 identical signatures):
+## 6. Retry and safe-stop
 
-- transient tool/process crash
-- flaky unit test with identical fix attempt not yet applied
-- missing dependency installable inside allowlisted package manager
+- Budgets: `PIPELINE_MAX_IDENTICAL_RETRIES`, `PIPELINE_MAX_TOTAL_ATTEMPTS`, timeout-specific limits in `RetryPolicy`
+- Recoverable kinds may retry the agent; unsafe / auth / validation-for-PASS do not chase green via agent retries
+- Secret-like / production indicators in agent text → safe-stop `BLOCK`
 
-Non-recoverable (immediate stop):
+## 7. Agents
 
-- path escape / write outside workspace
-- secret detected in output or staged files
-- production host indicators
-- missing credentials that cannot be inferred
-- irreversible action requested (real payment, destructive prod)
-- retry budget exhausted
-
-Stop outputs must include: observation, attempts, why unsafe to continue, next human action, artifact path.
-
-## 7. Security and isolation
-
-- Default compose: `network_mode: none` for public/demo tasks (matches client demo).
-- Phase 2 browser/API tasks: explicit egress allowlist only.
-- Secrets via runtime injection (GitHub Actions secrets / local env), never committed.
-- No `pull_request_target` with untrusted code + secrets.
-- Contractor repo only until contract; no client minipc/production.
-
-## 8. Mapping to client reference model
-
-| Client reference layer | Our component |
+| Mode | Behavior |
 | --- | --- |
-| Buzz / coordination | Deferred; Phase 1 single-session + scripts |
-| OpenHands / autonomous team | Agent Runtime Adapter |
-| Codex coding backend | Optional backend behind OpenHands; not required for Phase 1 public demo |
-| Code-owned safety/evidence kernel | Safety Kernel + Evidence Relayer |
-| Independent validator | `packages/validator` |
-| skill-doctor | Phase 2 optional retrospective |
+| `mock` (default) | Deterministic fixture agent; no LLM |
+| `openhands` | Spawns OpenHands CLI with scrubbed env; **not** a hard OS sandbox |
+| Scenario agents | Catalog / nail-patterns / failure demos — purpose-built for demos |
 
-## 9. Risks
+Public catalog demo defaults to its scenario agent unless `PIPELINE_AGENT_MODE=openhands`.
 
-| Risk | Impact | Mitigation |
-| --- | --- | --- |
-| Scope creep into full Vendure migration inside Phase 1 | Missed delivery | Hard freeze in `PHASE1_SCOPE.md` |
-| Rebuilding OpenHands poorly | Fragile agent loop | Reuse OSS; thin adapter only |
-| False PASS from agent prose | Client trust failure | Validator ignores prose; require artifacts |
-| Demo evidence shape diverges from future private gate | Rework | Keep `run-manifest` / `status.json` fields stable |
-| Disk pressure (client minipc ~85% full later) | Failed runs | Cleanup scripts; artifact retention policy |
-| LLM/API cost undisclosed | Commercial breach | Disclose in quote; prefer owner-supplied keys later |
-| Image fixture path breakage | Invalid Batch 2 prep | Never flatten `nail-patterns/` or `fixtures/美甲图案/` |
+## 8. Evidence
 
-## 10. Exact implementation order (after Phase 0 docs)
+Canonical Phase 1 evidence root: `artifacts/<runId>/` (compatible fields with evaluation-demo `results/` shape: `run-manifest`, `status`, logs, diff/summary/rollback).
 
-1. **Milestone A** — Preserve/prove public demo scripts in this repo.
-2. **Milestone B** — `docker/` runner + start/stop/check/cleanup; network none.
-3. **Milestone C** — Extract/generalize validator + evidence package from `verify.mjs`.
-4. **Milestone D** — Scenario schema + compiler for the catalog task.
-5. **Milestone E** — Safety kernel (paths, retries, redaction).
-6. **Milestone F** — OpenHands adapter wired to isolated workspace for catalog task.
-7. **Milestone G** — Second bounded path/fixture task (nail-patterns structure check).
-8. **Milestone H** — `workflow_dispatch` + artifact upload.
-9. **Stop for review** — Phase 1 gate checklist in `PHASE1_SCOPE.md`; no Phase 2 coding until approved.
+Artifact CLI: `node packages/validator/bin/validate.mjs --run-dir …` — ignores agent summary; refuses forgeable `PASS` without validation check JSON.
 
-## 11. Milestone verification commands
+## 9. Out of Phase 1
 
-See `docs/PHASE1_SCOPE.md` §6. Architecture-level smoke after packages exist:
+Deferred items remain listed in [PHASE1_SCOPE.md](./PHASE1_SCOPE.md) §3 and [LIMITATIONS.md](./LIMITATIONS.md): full Vendure storefront journeys, Stripe/Mailpit, Terraform, skill-doctor, etc.
+
+## 10. Smoke commands
 
 ```bash
-docker compose -f docker/compose.yaml build
-./scripts/start.sh --task evaluation-demo/task.md --mode baseline
+npm ci && npm test && npm run build
+./scripts/start.sh && ./scripts/check.sh
+npm run scenario:public-catalog
 node packages/validator/bin/validate.mjs --run-dir artifacts/$(ls -1t artifacts | head -1)
 ./scripts/cleanup.sh
 ```
