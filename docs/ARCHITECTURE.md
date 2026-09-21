@@ -69,7 +69,7 @@ task card → scenario compilation → technical analysis → autonomous develop
 | Natural-language task card | Yes — `evaluation-demo/task.md` + business YAML cards under `tasks/` |
 | Scenario compiler | Yes — business goal → `technical-task.json` (preconditions/actions/checks/cleanup/rollback/stop) → TaskDefinition |
 | Safety kernel | Yes — workspace/runs isolation, action/command allowlists, fail-closed MiniPC/SSH/production |
-| Autonomous agent | Yes — mock + OpenHands CLI adapter + scenario agents; default demo uses scenario/mock |
+| Autonomous agent | Yes — OpenHands adapter + mock/noop; **claimedSuccess ≠ PASS** ([AGENT_INTEGRATION.md](./AGENT_INTEGRATION.md)) |
 | Code / Playwright / GraphQL-API checks | Yes — independent validator check types |
 | Independent PASS/BLOCK | Yes — in-process + `packages/validator` |
 | Evidence package | Yes — `artifacts/<runId>/` (runtime alias of `runs/`) |

@@ -1,12 +1,15 @@
 import { z } from 'zod';
 
 import type { AgentResultEnvelope, AgentRunOutcome } from './agent-adapter.js';
+import { agentOutcome } from './agent-adapter.js';
 
 const AgentResultEnvelopeSchema = z
   .object({
     summary: z.string(),
     claimed_success: z.boolean(),
     changed_files: z.array(z.string()).optional(),
+    commands_executed: z.array(z.string()).optional(),
+    errors: z.array(z.string()).optional(),
   })
   .strict();
 
@@ -46,6 +49,10 @@ export function parseAgentResultEnvelope(raw: unknown): AgentResultEnvelope {
     ...(parsed.data.changed_files !== undefined
       ? { changed_files: parsed.data.changed_files }
       : {}),
+    ...(parsed.data.commands_executed !== undefined
+      ? { commands_executed: parsed.data.commands_executed }
+      : {}),
+    ...(parsed.data.errors !== undefined ? { errors: parsed.data.errors } : {}),
   };
 }
 
@@ -95,14 +102,14 @@ export function malformedOutcome(parts: {
   readonly message: string;
   readonly code: 'MALFORMED_OUTPUT' | 'FORBIDDEN_PIPELINE_VERDICT';
 }): AgentRunOutcome {
-  return {
+  return agentOutcome({
     claimedSuccess: false,
     summary: parts.message,
     stdout: parts.stdout,
     stderr: parts.stderr,
     failureClass: 'recoverable',
     failureCode: parts.code,
-    changedFiles: [],
-    diff: '',
-  };
+    errors: [parts.code, parts.message],
+    finalReport: parts.message,
+  });
 }

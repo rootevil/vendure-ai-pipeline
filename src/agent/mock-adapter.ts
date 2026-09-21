@@ -2,10 +2,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type { ExecutionContext } from '../safety/execution-context.js';
-import type { AgentAdapter, AgentRunOutcome } from './agent-adapter.js';
+import { agentOutcome, type AgentAdapter, type AgentRunOutcome } from './agent-adapter.js';
+import { buildAgentRequest } from './agent-request.js';
 import { diffSnapshots, snapshotWorkspace } from './change-capture.js';
 import { AgentOutputError, malformedOutcome, parseAgentResultJson } from './result-parser.js';
-import { buildStructuredTaskPrompt } from './task-prompt.js';
+import { writeAgentRequestFiles } from './task-prompt.js';
 
 export type MockAgentBehavior =
   'success' | 'failure' | 'timeout' | 'retryable' | 'malformed' | 'forbidden_verdict';
@@ -20,6 +21,7 @@ export interface MockAgentAdapterOptions {
 /**
  * Deterministic agent for pipeline tests without an external LLM/API.
  * Simulates OpenHands-shaped workspace interaction and agent-result.json.
+ * claimedSuccess is never Pipeline PASS.
  */
 export class MockAgentAdapter implements AgentAdapter {
   readonly name = 'mock';
@@ -31,79 +33,80 @@ export class MockAgentAdapter implements AgentAdapter {
     const behavior = this.options.behavior ?? 'success';
     const timeoutMs = this.options.timeoutMs ?? 30_000;
     const delay = this.options.delay ?? defaultDelay;
+    const request = buildAgentRequest(context, timeoutMs);
 
     context.logger.info('mock agent starting', { behavior, timeoutMs });
-    writeFileSync(
-      join(context.workspaceDir, 'task-brief.md'),
-      buildStructuredTaskPrompt(context.task, context.workspaceDir),
-      'utf8',
-    );
+    writeAgentRequestFiles(context.workspaceDir, context.task, request);
 
     const before = snapshotWorkspace(context.workspaceDir);
 
     if (behavior === 'timeout') {
       await delay(timeoutMs + 25);
-      return {
+      return agentOutcome({
         claimedSuccess: false,
         summary: 'Mock agent exceeded timeout budget',
-        stdout: '',
         stderr: 'mock-agent: timeout',
         failureClass: 'recoverable',
         failureCode: 'AGENT_TIMEOUT',
-        changedFiles: [],
-        diff: '',
-      };
+        commandsExecuted: ['mock:timeout'],
+        request,
+      });
     }
 
     if (behavior === 'failure') {
-      return {
+      return agentOutcome({
         claimedSuccess: false,
         summary: 'Mock agent failed the task on purpose',
         stdout: 'mock stdout: failure',
         stderr: 'mock stderr: failure',
         failureClass: 'non_recoverable',
         failureCode: 'MOCK_FAILURE',
-        changedFiles: [],
-        diff: '',
-      };
+        commandsExecuted: ['mock:failure'],
+        request,
+      });
     }
 
     if (behavior === 'retryable') {
       this.retryCount += 1;
       if (this.retryCount < 2) {
-        return {
+        return agentOutcome({
           claimedSuccess: false,
           summary: 'Mock agent transient failure',
           stdout: 'mock stdout: retryable',
           stderr: 'mock stderr: retryable',
           failureClass: 'recoverable',
           failureCode: 'MOCK_RETRYABLE',
-          changedFiles: [],
-          diff: '',
-        };
+          commandsExecuted: ['mock:retryable'],
+          request,
+        });
       }
-      // Fall through to success on second attempt.
     }
 
     if (behavior === 'malformed') {
       writeFileSync(join(context.workspaceDir, 'agent-result.json'), '{not-json', 'utf8');
       try {
         parseAgentResultJson('{not-json');
-        return malformedOutcome({
-          stdout: '',
-          stderr: 'expected parse failure',
-          message: 'Malformed agent output was not rejected',
-          code: 'MALFORMED_OUTPUT',
-        });
+        return {
+          ...malformedOutcome({
+            stdout: '',
+            stderr: 'expected parse failure',
+            message: 'Malformed agent output was not rejected',
+            code: 'MALFORMED_OUTPUT',
+          }),
+          request,
+        };
       } catch (error) {
         const message = error instanceof AgentOutputError ? error.message : String(error);
         const code = error instanceof AgentOutputError ? error.code : 'MALFORMED_OUTPUT';
-        return malformedOutcome({
-          stdout: '{not-json',
-          stderr: '',
-          message,
-          code,
-        });
+        return {
+          ...malformedOutcome({
+            stdout: '{not-json',
+            stderr: '',
+            message,
+            code,
+          }),
+          request,
+        };
       }
     }
 
@@ -116,29 +119,36 @@ export class MockAgentAdapter implements AgentAdapter {
       writeFileSync(join(context.workspaceDir, 'agent-result.json'), payload, 'utf8');
       try {
         parseAgentResultJson(payload);
-        return malformedOutcome({
-          stdout: payload,
-          stderr: '',
-          message: 'Forbidden pipeline verdict was not rejected',
-          code: 'FORBIDDEN_PIPELINE_VERDICT',
-        });
+        return {
+          ...malformedOutcome({
+            stdout: payload,
+            stderr: '',
+            message: 'Forbidden pipeline verdict was not rejected',
+            code: 'FORBIDDEN_PIPELINE_VERDICT',
+          }),
+          request,
+        };
       } catch (error) {
         const message = error instanceof AgentOutputError ? error.message : String(error);
-        return malformedOutcome({
-          stdout: payload,
-          stderr: '',
-          message,
-          code: 'FORBIDDEN_PIPELINE_VERDICT',
-        });
+        return {
+          ...malformedOutcome({
+            stdout: payload,
+            stderr: '',
+            message,
+            code: 'FORBIDDEN_PIPELINE_VERDICT',
+          }),
+          request,
+        };
       }
     }
 
-    // success (and retryable after first failure)
     const writtenFiles = writeSuccessArtifacts(context);
     const envelope = {
       summary: `Mock agent completed task ${context.task.id}`,
       claimed_success: true,
       changed_files: writtenFiles,
+      commands_executed: ['mock:write-artifacts'],
+      errors: [] as string[],
     };
     writeFileSync(
       join(context.workspaceDir, 'agent-result.json'),
@@ -148,24 +158,21 @@ export class MockAgentAdapter implements AgentAdapter {
 
     const after = snapshotWorkspace(context.workspaceDir);
     const changes = diffSnapshots(before, after);
-    const parsed = parseAgentResultJson(
-      JSON.stringify({
-        summary: envelope.summary,
-        claimed_success: envelope.claimed_success,
-        changed_files: envelope.changed_files,
-      }),
-    );
+    const parsed = parseAgentResultJson(JSON.stringify(envelope));
 
-    return {
+    return agentOutcome({
       claimedSuccess: parsed.claimed_success,
       summary: parsed.summary,
       stdout: 'mock stdout: success',
-      stderr: '',
       failureClass: 'recoverable',
       failureCode: 'MOCK_SUCCESS',
       changedFiles: parsed.changed_files ?? changes.changedFiles,
       diff: changes.diff,
-    };
+      commandsExecuted: parsed.commands_executed ?? ['mock:write-artifacts'],
+      errors: parsed.errors ?? [],
+      finalReport: parsed.summary,
+      request,
+    });
   }
 }
 

@@ -72,7 +72,13 @@ export {
   type AgentRunOutcome,
   type AgentResultEnvelope,
   NoopAgentAdapter,
+  agentOutcome,
 } from './agent/agent-adapter.js';
+export {
+  buildAgentRequest,
+  type AgentRequest,
+  type AgentReport,
+} from './agent/agent-request.js';
 export { MockAgentAdapter, type MockAgentBehavior } from './agent/mock-adapter.js';
 export { OpenHandsAgentAdapter } from './agent/openhands-adapter.js';
 export { createAgentAdapter } from './agent/agent-factory.js';
