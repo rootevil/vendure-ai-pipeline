@@ -89,6 +89,18 @@ Built-in fixtures include:
 
 ## 5. Run demonstrations
 
+Deliberate client demos (not hard-coded PASS):
+
+```bash
+npm run demo:success
+npm run demo:recovery
+npm run demo:block
+```
+
+`demo:success` is Task → Agent → Tests → Browser → API → DB → PASS.  
+`demo:recovery` is Task → Agent → Failure → Diagnosis → Fix → Retest → PASS.  
+`demo:block` is Failure → retries exhausted → circuit breaker → BLOCK → evidence.
+
 ### Public catalog (primary Phase 1 demo)
 
 Applies the published reference catalog adapter inside an isolated copy of `evaluation-demo`, starts a local demo server, and runs health/API/GraphQL/browser/state checks.

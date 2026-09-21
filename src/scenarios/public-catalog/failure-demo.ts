@@ -40,6 +40,8 @@ export type FailureDemoMode = 'recoverable' | 'unrecoverable';
 export interface FailureDemoOptions {
   readonly mode: FailureDemoMode;
   readonly rootDir?: string;
+  readonly artifactsDir?: string;
+  readonly workspaceDir?: string;
   readonly runId?: string;
   readonly keepWorkspace?: boolean;
   readonly maxRepairAttempts?: number;
@@ -83,8 +85,8 @@ const DELIBERATE_FAILURE = {
 export async function runFailureDemo(options: FailureDemoOptions): Promise<FailureDemoResult> {
   const root = options.rootDir ?? mkdtempSync(join(tmpdir(), 'vendure-failure-demo-'));
   const runId = options.runId ?? `failure-${options.mode}-${Date.now()}`;
-  const workspaceDir = join(root, 'workspace');
-  const artifactsDir = join(root, 'artifacts');
+  const workspaceDir = options.workspaceDir ?? join(root, 'workspace');
+  const artifactsDir = options.artifactsDir ?? join(root, 'artifacts');
   const maxRepairAttempts = options.maxRepairAttempts ?? 1;
   const logger = options.logger ?? createLogger({ level: 'info' });
   const steps: FailureDemoStep[] = [];
