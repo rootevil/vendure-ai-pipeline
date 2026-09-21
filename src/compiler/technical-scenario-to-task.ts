@@ -145,6 +145,18 @@ function technicalCheckToValidationStep(check: TechnicalCheck): ValidationStep |
         screenshotName: String(p.screenshotName ?? `${check.id}.png`),
         timeoutMs: Number(p.timeoutMs ?? 15_000),
       };
+    case 'browser_journey':
+      return {
+        id: check.id,
+        type: 'browser_journey',
+        startUrl: String(p.startUrl),
+        timeoutMs: Number(p.timeoutMs ?? 60_000),
+        resultsFileName: String(p.resultsFileName ?? 'playwright-results.json'),
+        actions: (p.actions as Extract<
+          import('../models/types.js').ValidationStep,
+          { type: 'browser_journey' }
+        >['actions']) ?? [],
+      };
     case 'database_state':
       return {
         id: check.id,

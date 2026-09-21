@@ -32,9 +32,13 @@ export interface BrowserPage {
   goto(url: string, options?: { timeout?: number }): Promise<void>;
   title(): Promise<string>;
   textContent(selector: string): Promise<string | null>;
+  click(selector: string): Promise<void>;
+  fill(selector: string, value: string): Promise<void>;
+  waitForSelector(selector: string, options?: { timeout?: number }): Promise<void>;
   screenshot(options: { path: string; fullPage?: boolean }): Promise<Buffer | undefined>;
   close(): Promise<void>;
 }
+
 
 export type BrowserLauncher = (input: { readonly headless?: boolean }) => Promise<BrowserPage>;
 

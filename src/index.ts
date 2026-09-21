@@ -105,6 +105,12 @@ export {
   type IndependentValidatorDependencies,
   toStepResult,
 } from './validator/independent-validator.js';
+export {
+  buildValidatorVerdict,
+  writeValidatorVerdict,
+  type ValidatorVerdict,
+  type ValidatorVerdictCheck,
+} from './validator/verdict.js';
 export { runIndependentCheck, createDefaultCheckContext } from './validator/run-checks.js';
 export {
   type HttpFetcher,
@@ -115,6 +121,7 @@ export {
 } from './validator/check-types.js';
 export {
   createFakeBrowserLauncher,
+  createFakeJourneyBrowserLauncher,
   playwrightBrowserLauncher,
 } from './validator/browser-launcher.js';
 export {
@@ -164,6 +171,21 @@ export {
   type NailPatternsScenarioResult,
 } from './scenarios/nail-patterns/run-scenario.js';
 export { NailPatternsScenarioAgent } from './scenarios/nail-patterns/scenario-agent.js';
+export {
+  runBrowserCheckoutScenario,
+  buildBrowserCheckoutTask,
+  type BrowserCheckoutScenarioOptions,
+  type BrowserCheckoutScenarioResult,
+} from './scenarios/browser-checkout/run-scenario.js';
+export {
+  startBrowserCheckoutDemoStorefront,
+  type DemoStorefrontHandle as BrowserCheckoutDemoHandle,
+} from './scenarios/browser-checkout/demo-storefront.js';
+export {
+  buildCheckoutJourneyStep,
+  buildCheckoutJourneyActions,
+  CHECKOUT_SCREENSHOTS,
+} from './scenarios/browser-checkout/journey.js';
 export { validateRunDir, type ValidateRunDirResult } from './validator/validate-run-dir.js';
 export {
   createWorkspaceCheckpoint,

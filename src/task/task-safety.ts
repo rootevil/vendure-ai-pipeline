@@ -112,6 +112,33 @@ function validateStep(step: ValidationStep, allowedTools: readonly AllowedTool[]
         );
       }
       break;
+    case 'browser_journey':
+      errors.push(...validateHttpUrl(step.startUrl, `validationSteps.${step.id}.startUrl`));
+      for (const [index, action] of step.actions.entries()) {
+        const shot =
+          action.type === 'screenshot'
+            ? action.name
+            : 'screenshot' in action
+              ? action.screenshot
+              : undefined;
+        if (shot) {
+          try {
+            assertSafeScreenshotName(shot);
+          } catch (error) {
+            errors.push(
+              `validationSteps.${step.id}.actions[${index}].screenshot: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+      }
+      try {
+        assertSafeScreenshotName(step.resultsFileName);
+      } catch (error) {
+        errors.push(
+          `validationSteps.${step.id}.resultsFileName: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      break;
     case 'database_state':
       if (step.driver === 'json_fixture') {
         if (!step.fixturePath) {

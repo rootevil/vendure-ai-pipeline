@@ -5,6 +5,7 @@ import type {
   ValidationCheckResult,
   ValidationStepResult,
 } from '../models/types.js';
+import type { ValidatorVerdict } from './verdict.js';
 
 /**
  * Independent PASS/BLOCK authority. Must not call an LLM.
@@ -31,6 +32,8 @@ export interface ValidatorDecision {
   readonly exitCode: number;
   readonly checks?: readonly ValidationCheckResult[];
   readonly stepResults?: readonly ValidationStepResult[];
+  /** Client-shaped verdict ({ status, checks[{name,status}] }); evidence-only. */
+  readonly verdict?: ValidatorVerdict;
 }
 
 export class ArtifactPresenceValidator implements Validator {

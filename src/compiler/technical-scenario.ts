@@ -18,6 +18,7 @@ export const TechnicalCheckSchema = z.object({
       'http_response',
       'graphql_request',
       'browser_playwright',
+      'browser_journey',
       'database_state',
       'workspace_file_exists',
       'workspace_file_contains',

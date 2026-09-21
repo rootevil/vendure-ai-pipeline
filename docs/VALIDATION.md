@@ -7,8 +7,41 @@ How PASS/BLOCK is decided, what evidence is required, and how to re-validate a r
 **Only the independent validator decides the pipeline status.**  
 Agent fields such as `claimedSuccess`, summaries, or “done” prose are informational and never grant `PASS`.
 
+```text
+Agent says SUCCESS
+       ↓
+Playwright
+       ↓
+GraphQL
+       ↓
+PostgreSQL / fixture DB
+       ↓
+Assertions
+       ↓
+PASS / BLOCK
+```
+
 In-process authority: `src/validator/independent-validator.ts` (used by `TaskRunner` / scenarios).  
 Offline re-check: `packages/validator/bin/validate.mjs` → `validateRunDir()`.
+
+Client-facing artifact: `artifacts/<runId>/validator-verdict.json` — built only from check evidence.
+
+```json
+{
+  "status": "PASS",
+  "checks": [
+    { "name": "storefront loads", "status": "PASS" },
+    { "name": "product visible", "status": "PASS" },
+    { "name": "order created", "status": "PASS" },
+    { "name": "database order exists", "status": "PASS" }
+  ],
+  "agentClaimIgnored": true,
+  "agentClaimedSuccess": true,
+  "summary": "Independent checks passed; agent claim was not used as authority"
+}
+```
+
+If any critical assertion fails, overall `status` is `BLOCK` regardless of the agent self-report.
 
 ## Status vocabulary
 
@@ -32,6 +65,7 @@ Evaluation-demo verifier (`evaluation-demo/scripts/verify.mjs`) uses the same st
 | `http_response` | Status + optional body substring |
 | `graphql_request` | GraphQL errors / data path |
 | `browser_playwright` | Title/selector/text (+ screenshot name) |
+| `browser_journey` | Multi-step Playwright flow; numbered screenshots + `playwright-results.json` |
 | `database_state` | `json_fixture` (default) or optional `postgres` driver |
 | `path_invariant` | Nested fixture tree not flattened |
 | `redis_ping` / `postgres_ready` | Stack dependency probes (allowlisted hosts) |
@@ -48,7 +82,7 @@ Minimum files commonly required by tasks:
 - `stdout.log`, `stderr.log`
 - `change-summary.md`, `rollback.md`, `summary.md`
 
-Also produced when applicable: `result.json`, `report.json`, `validation.json`, `validation-results.json`, `summary.html`, `evidence-manifest.json`, `diff.patch` / `git.diff`, `screenshots/`, `api-responses/`, `workspace-checkpoint/`.
+Also produced when applicable: `result.json`, `report.json`, `validation.json`, `validation-results.json`, `validator-verdict.json`, `playwright-results.json`, `summary.html`, `evidence-manifest.json`, `diff.patch` / `git.diff`, `screenshots/`, `api-responses/`, `workspace-checkpoint/`.
 
 Logs and diffs are **redacted** for secret-like patterns before write.
 
@@ -91,12 +125,13 @@ Tree `evaluation-demo/app/src/catalog.mjs` is incomplete by design. The catalog 
 | Agent claims success | Handed to validator; claim ignored for PASS |
 | Forge `status.json` alone | Artifact CLI blocks without check JSON |
 | Skip required evidence | `BLOCK` |
-| Fail a check | `BLOCK` |
+| Fail a check | `BLOCK` (`validator-verdict.json` status `BLOCK`) |
 
 Side effects on an unsandboxed host agent are a **safety** concern (limitations doc), not a validator trust rule.
 
 ## Related
 
 - [QUICKSTART.md](./QUICKSTART.md)  
+- [AGENT_INTEGRATION.md](./AGENT_INTEGRATION.md)  
 - [FAILURE_DEMO.md](./FAILURE_DEMO.md)  
 - [PUBLIC_CATALOG_SCENARIO.md](./PUBLIC_CATALOG_SCENARIO.md)  

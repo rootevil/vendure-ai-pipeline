@@ -121,6 +121,52 @@ export const ValidationStepSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     id: z.string().min(1),
+    type: z.literal('browser_journey'),
+    /** Absolute start URL for the journey (typically storefront home). */
+    startUrl: z.string().url(),
+    timeoutMs: z.number().int().positive().max(180_000).default(60_000),
+    /** Artifact filename for Playwright step results (under run dir). */
+    resultsFileName: z.string().min(1).default('playwright-results.json'),
+    actions: z
+      .array(
+        z.discriminatedUnion('type', [
+          z.object({
+            type: z.literal('goto'),
+            path: z.string().min(1),
+            screenshot: z.string().min(1).optional(),
+            expectTitleContains: z.string().min(1).optional(),
+            expectSelector: z.string().min(1).optional(),
+            expectTextContains: z.string().min(1).optional(),
+          }),
+          z.object({
+            type: z.literal('click'),
+            selector: z.string().min(1),
+            screenshot: z.string().min(1).optional(),
+            expectSelector: z.string().min(1).optional(),
+            expectTextContains: z.string().min(1).optional(),
+          }),
+          z.object({
+            type: z.literal('fill'),
+            selector: z.string().min(1),
+            value: z.string(),
+          }),
+          z.object({
+            type: z.literal('assert'),
+            expectSelector: z.string().min(1).optional(),
+            expectTextContains: z.string().min(1).optional(),
+            expectTitleContains: z.string().min(1).optional(),
+            screenshot: z.string().min(1).optional(),
+          }),
+          z.object({
+            type: z.literal('screenshot'),
+            name: z.string().min(1),
+          }),
+        ]),
+      )
+      .min(1),
+  }),
+  z.object({
+    id: z.string().min(1),
     type: z.literal('path_invariant'),
     /** Workspace-relative root that must keep nested relative paths. */
     root: z.string().min(1),

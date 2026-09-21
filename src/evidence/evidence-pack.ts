@@ -16,6 +16,7 @@ import type {
   TaskDefinition,
   ValidationCheckResult,
 } from '../models/types.js';
+import { buildValidatorVerdict, writeValidatorVerdict } from '../validator/verdict.js';
 
 export interface FinalizeEvidencePackInput {
   readonly runDir: string;
@@ -100,6 +101,17 @@ export function finalizeEvidencePack(input: FinalizeEvidencePackInput): Evidence
   writeJson(join(runDir, 'validation.json'), validationPayload);
   // Keep alias used by Phase 5 validators/tests.
   writeJson(join(runDir, 'validation-results.json'), input.result.validationChecks);
+
+  const lastClaimed = input.result.attempts.at(-1)?.agentClaimedSuccess ?? false;
+  writeValidatorVerdict(
+    runDir,
+    buildValidatorVerdict({
+      status: input.result.status,
+      checks: input.result.validationChecks,
+      agentClaimedSuccess: lastClaimed,
+      notes: input.result.validatorNotes,
+    }),
+  );
 
   const stdout = input.stdout ?? readIfExists(join(runDir, 'stdout.log'));
   const stderr = input.stderr ?? readIfExists(join(runDir, 'stderr.log'));
@@ -255,6 +267,17 @@ function buildEvidenceManifest(input: {
         path: 'validation.json',
         type: 'validation',
         description: 'Independent validator checks with expected vs actual results',
+      },
+      {
+        path: 'validator-verdict.json',
+        type: 'validation',
+        description:
+          'Client verdict { status, checks[{name,status}] }; PASS/BLOCK from evidence only',
+      },
+      {
+        path: 'playwright-results.json',
+        type: 'validation',
+        description: 'Playwright browser journey step results and screenshot list',
       },
       {
         path: 'test-results.json',

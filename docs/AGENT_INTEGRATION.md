@@ -18,9 +18,13 @@ Workspace               (workspace/runs/<run-id>/)
 
 ```text
 Agent claimedSuccess  ──ignored──▶  Independent Validator  ──decides──▶  PASS | BLOCK
+                                         │
+                    Playwright / GraphQL / DB / HTTP assertions
+                                         │
+                              validator-verdict.json
 ```
 
-**Agent success ≠ Pipeline PASS.** That distinction is mandatory.
+**Agent success ≠ Pipeline PASS.** That distinction is mandatory. The final PASS/BLOCK decision comes from evidence/validation only — see [VALIDATION.md](./VALIDATION.md).
 
 ## Modes
 

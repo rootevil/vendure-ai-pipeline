@@ -168,6 +168,7 @@ Pipeline status (machine):
 
 ```bash
 cat "artifacts/$RUN/status.json"
+cat "artifacts/$RUN/validator-verdict.json"
 ```
 
 Human summary (notes that agent claim is ignored):
@@ -183,6 +184,15 @@ node packages/validator/bin/validate.mjs --run-dir "artifacts/$RUN"
 ```
 
 Expected: `"status": "PASS"`, exit code `0`.
+
+### 7b. Playwright browser checkout (visually obvious)
+
+```bash
+npm run scenario:browser-checkout
+# Real Chromium screenshots: npm run scenario:browser-checkout -- --real-browser
+```
+
+Expect numbered shots `01-home.png` … `04-checkout.png` plus `playwright-results.json`. Details: [BROWSER_VALIDATION.md](./BROWSER_VALIDATION.md).
 
 ### 8. Demonstrate one controlled failure
 

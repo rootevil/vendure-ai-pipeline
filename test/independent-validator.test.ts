@@ -188,6 +188,19 @@ test('independent validator PASSes health/http/graphql/db/browser checks', async
           assert.equal(typeof check.output, 'string');
         }
         assert.ok(existsSync(join(context.artifactDir, 'validation-results.json')));
+        assert.ok(decision.verdict);
+        assert.equal(decision.verdict.status, 'PASS');
+        assert.equal(decision.verdict.agentClaimIgnored, true);
+        const verdictFile = join(context.artifactDir, 'validator-verdict.json');
+        assert.ok(existsSync(verdictFile));
+        const verdictOnDisk = JSON.parse(readFileSync(verdictFile, 'utf8')) as {
+          status: string;
+          agentClaimIgnored: boolean;
+          checks: Array<{ name: string; status: string }>;
+        };
+        assert.equal(verdictOnDisk.status, 'PASS');
+        assert.equal(verdictOnDisk.agentClaimIgnored, true);
+        assert.ok(verdictOnDisk.checks.every((c) => c.status === 'PASS'));
       },
     );
   } finally {
@@ -235,10 +248,16 @@ test('independent validator BLOCKs when checks fail despite agent claimed succes
 
         assert.equal(decision.status, 'BLOCK');
         assert.equal(decision.exitCode, 1);
+        assert.equal(decision.verdict?.status, 'BLOCK');
+        assert.equal(decision.verdict?.agentClaimIgnored, true);
         assert.ok(
           decision.checks?.some((check) => check.checkName === 'health' && check.status === 'FAIL'),
         );
         assert.ok(decision.notes.some((note) => note.includes('ignored for PASS/BLOCK')));
+        const verdictOnDisk = JSON.parse(
+          readFileSync(join(context.artifactDir, 'validator-verdict.json'), 'utf8'),
+        ) as { status: string };
+        assert.equal(verdictOnDisk.status, 'BLOCK');
       },
     );
   } finally {

@@ -128,6 +128,7 @@ Each run writes under `artifacts/<runId>/` (or a temp directory printed in JSON)
 | `run-manifest.json` | Run metadata |
 | `result.json` / `report.json` | Validator-oriented result / execution report |
 | `validation.json` / `validation-results.json` | Per-check expected vs actual |
+| `validator-verdict.json` | Client verdict: `{ status, checks[{name,status}] }` (evidence-only) |
 | `stdout.log` / `stderr.log` | Redacted agent/process logs |
 | `change-summary.md` / `diff.patch` | Change summary |
 | `rollback.md` | How to discard the disposable workspace |
@@ -166,6 +167,7 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 
 - [TASK_CARD.md](./TASK_CARD.md) — business goal cards  
 - [SCENARIO_COMPILER.md](./SCENARIO_COMPILER.md) — business → technical-task.json  
+- [BROWSER_VALIDATION.md](./BROWSER_VALIDATION.md) — Playwright storefront → checkout demo  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
 - [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  

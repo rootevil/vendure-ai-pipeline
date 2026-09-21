@@ -2,6 +2,7 @@ import type { ValidationCheckResult, ValidationStep } from '../models/types.js';
 import { playwrightBrowserLauncher } from './browser-launcher.js';
 import type { CheckRunnerContext } from './check-types.js';
 import { runBrowserPlaywrightCheck } from './checks/browser.js';
+import { runBrowserJourneyCheck } from './checks/browser-journey.js';
 import { runDatabaseStateCheck } from './checks/database.js';
 import { runGraphqlRequestCheck } from './checks/graphql.js';
 import { runApplicationHealthCheck } from './checks/health.js';
@@ -32,6 +33,8 @@ export async function runIndependentCheck(
       return runDatabaseStateCheck(step, ctx);
     case 'browser_playwright':
       return runBrowserPlaywrightCheck(step, ctx);
+    case 'browser_journey':
+      return runBrowserJourneyCheck(step, ctx);
     case 'path_invariant':
       return runPathInvariantCheck(step, ctx);
     case 'redis_ping':

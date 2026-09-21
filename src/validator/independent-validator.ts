@@ -6,6 +6,7 @@ import { checkPassed, summarizeChecks } from './check-result.js';
 import type { BrowserLauncher, DatabaseExecutor, HttpFetcher } from './check-types.js';
 import { createDefaultCheckContext, runIndependentCheck } from './run-checks.js';
 import type { Validator, ValidatorDecision, ValidatorInput } from './validator.js';
+import { buildValidatorVerdict, writeValidatorVerdict, type ValidatorVerdict } from './verdict.js';
 
 export interface IndependentValidatorDependencies {
   readonly fetchHttp?: HttpFetcher;
@@ -17,6 +18,13 @@ export interface IndependentValidatorDependencies {
 
 /**
  * Independent PASS/BLOCK authority.
+ *
+ *   Agent says SUCCESS
+ *          ↓
+ *   Playwright / GraphQL / HTTP / PostgreSQL / assertions
+ *          ↓
+ *        PASS / BLOCK
+ *
  * Agent claimedSuccess is recorded in notes only and never grants PASS.
  */
 export class IndependentValidator implements Validator {
@@ -113,12 +121,21 @@ export class IndependentValidator implements Validator {
       testExitCode: input.testExitCode,
     });
 
+    const verdict: ValidatorVerdict = buildValidatorVerdict({
+      status: decision.status,
+      checks,
+      agentClaimedSuccess: input.agentClaimedSuccess,
+      notes,
+    });
+    writeValidatorVerdict(input.context.artifactDir, verdict);
+
     return {
       status: decision.status,
       notes,
       exitCode: decision.exitCode,
       checks,
       stepResults,
+      verdict,
     };
   }
 }
