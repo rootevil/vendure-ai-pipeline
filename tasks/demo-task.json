@@ -1,0 +1,124 @@
+{
+  "id": "vendure-public-catalog-e2e",
+  "title": "Public Vendure catalog evaluation scenario",
+  "goal": "Using only the isolated public evaluation-demo, complete the catalog migration adapter, start the demo shop surface, and prove the public catalog contract via health, HTTP, GraphQL, browser, and state checks with reviewable evidence.",
+  "acceptanceCriteria": [
+    "Active legacy records are migrated; inactive records are excluded",
+    "internalNote is never exposed",
+    "Demo /health returns 200",
+    "REST /api/products returns migrated items",
+    "GraphQL products.totalItems equals 2",
+    "Browser page lists migrated product names",
+    "public-catalog-state.json count equals 2"
+  ],
+  "allowedTools": ["filesystem", "mock", "node_test"],
+  "timeoutMs": 180000,
+  "retryPolicy": {
+    "maxIdenticalRetries": 2,
+    "maxTotalAttempts": 3
+  },
+  "validationSteps": [
+    { "id": "evidence", "type": "evidence_present" },
+    {
+      "id": "adapter-changed",
+      "type": "changed_files_include",
+      "path": "evaluation-demo/app/src/catalog.mjs"
+    },
+    {
+      "id": "health",
+      "type": "application_health",
+      "url": "http://127.0.0.1:0/health",
+      "expectStatus": 200,
+      "timeoutMs": 5000
+    },
+    {
+      "id": "api-products",
+      "type": "http_response",
+      "url": "http://127.0.0.1:0/api/products",
+      "method": "GET",
+      "headers": {},
+      "expectStatus": 200,
+      "expectBodyContains": "NAIL-001",
+      "timeoutMs": 5000
+    },
+    {
+      "id": "graphql-products",
+      "type": "graphql_request",
+      "url": "http://127.0.0.1:0/graphql",
+      "query": "{ products { totalItems items { sku name } } }",
+      "variables": {},
+      "headers": {},
+      "expectNoErrors": true,
+      "expectDataPath": "products.totalItems",
+      "expectDataEquals": 2,
+      "timeoutMs": 5000
+    },
+    {
+      "id": "browser-catalog",
+      "type": "browser_playwright",
+      "url": "http://127.0.0.1:0/",
+      "expectTitleContains": "Catalog",
+      "expectSelector": "#product-list",
+      "expectTextContains": "Soft Pink Almond",
+      "screenshotName": "public-catalog.png",
+      "timeoutMs": 10000
+    },
+    {
+      "id": "db-state",
+      "type": "database_state",
+      "driver": "json_fixture",
+      "fixturePath": "evaluation-demo/app/data/public-catalog-state.json",
+      "query": "count",
+      "expectEquals": 2
+    }
+  ],
+  "mode": "acceptance",
+  "sourcePaths": [
+    "evaluation-demo/app/fixtures/legacy-catalog.json",
+    "evaluation-demo/app/tests/acceptance.test.mjs",
+    "evaluation-demo/task.md"
+  ],
+  "writeAllowlist": ["evaluation-demo/app/src", "evaluation-demo/app/data"],
+  "requiredEvidence": [
+    "run-manifest.json",
+    "status.json",
+    "stdout.log",
+    "stderr.log",
+    "change-summary.md",
+    "rollback.md",
+    "summary.md"
+  ],
+  "stages": [
+    {
+      "id": "seed-incomplete",
+      "description": "Start from incomplete catalog.mjs in an isolated evaluation-demo copy",
+      "preconditions": ["evaluation-demo materialized"],
+      "actions": ["Seed incomplete adapter"],
+      "expectedChecks": ["Baseline adapter returns empty catalog"],
+      "cleanup": []
+    },
+    {
+      "id": "agent-fix",
+      "description": "Agent applies the published reference catalog adapter",
+      "preconditions": ["Write allowlist limited to evaluation-demo/app"],
+      "actions": ["Write catalog.mjs", "Write public-catalog-state.json"],
+      "expectedChecks": ["Acceptance tests exit 0"],
+      "cleanup": []
+    },
+    {
+      "id": "validate",
+      "description": "Independent validator checks health/API/GraphQL/browser/state/evidence",
+      "preconditions": ["Demo server running on localhost"],
+      "actions": ["Run independent checks", "Write evidence pack"],
+      "expectedChecks": ["PASS only when all independent checks succeed"],
+      "cleanup": ["Stop demo server"]
+    }
+  ],
+  "circuitBreakRules": [
+    "Do not access private client repos, minipc, or production",
+    "Do not bypass independent validation to obtain PASS",
+    "Use only the isolated evaluation-demo materials"
+  ],
+  "cleanupWorkspace": true,
+  "_comment": "URLs with port 0 are placeholders. Prefer: npm run scenario:public-catalog (binds an ephemeral port and rewrites the live task)."
+}

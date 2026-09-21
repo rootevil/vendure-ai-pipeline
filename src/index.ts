@@ -167,3 +167,14 @@ export {
   looksLikeProductionTarget,
 } from './safety/redaction.js';
 export { loadTaskDefinitionFromPath } from './task/task-card.js';
+export { compileScenarioFromPath } from './compiler/scenario-compiler.js';
+export { compileBusinessTaskCard } from './compiler/compile-business-card.js';
+export {
+  loadBusinessTaskCardFromYaml,
+  parseBusinessTaskCardYaml,
+  looksLikeBusinessTaskCard,
+} from './compiler/load-business-card.js';
+export {
+  BusinessTaskCardSchema,
+  type BusinessTaskCard,
+} from './compiler/business-task-card.js';

@@ -3,10 +3,10 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { loadConfig, ConfigError } from '../config/load-config.js';
+import { compileScenarioFromPath } from '../compiler/scenario-compiler.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { createLogger } from '../logging/logger.js';
 import { TaskDefinitionError } from '../task/task-definition.js';
-import { loadTaskDefinitionFromPath } from '../task/task-card.js';
 
 export interface CliDependencies {
   readonly env?: NodeJS.ProcessEnv;
@@ -19,11 +19,12 @@ function printUsage(stream: NodeJS.WritableStream): void {
   stream.write(
     [
       'Usage:',
-      '  vendure-pipeline run --task <path-to-task.json|task.md>',
+      '  vendure-pipeline compile --task <path-to-task.yaml|task.md|task.json>',
+      '  vendure-pipeline run --task <path-to-task.yaml|task.md|task.json>',
       '',
       'Flow:',
-      '  TASK → parse/validate → isolated run → agent → changes → validators',
-      '      → evidence → PASS/BLOCK → cleanup → report',
+      '  business goal card → scenario compiler → technical task.json metrics',
+      '  → isolated run → agent → validators → evidence → PASS/BLOCK',
       '',
       'Environment:',
       '  PIPELINE_MODE, PIPELINE_ARTIFACTS_DIR, PIPELINE_WORKSPACE_DIR,',
@@ -63,7 +64,7 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
     return 0;
   }
 
-  if (command !== 'run') {
+  if (command !== 'run' && command !== 'compile') {
     stderr.write(`Unknown command: ${command}\n`);
     printUsage(stderr);
     return 1;
@@ -76,13 +77,19 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
   }
 
   try {
+    const task = compileScenarioFromPath(resolve(taskPath));
+
+    if (command === 'compile') {
+      stdout.write(`${JSON.stringify(task, null, 2)}\n`);
+      return 0;
+    }
+
     const config = loadConfig(env);
     const logger = createLogger({
       level: config.logLevel,
       stdout,
       stderr,
     });
-    const task = loadTaskDefinitionFromPath(resolve(taskPath));
     const runner = new TaskRunner({ config, logger });
     const result = await runner.execute(task);
     stdout.write(`${JSON.stringify(result, null, 2)}\n`);

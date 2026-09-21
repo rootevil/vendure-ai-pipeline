@@ -1,0 +1,19 @@
+# Demo task — public catalog vertical slice
+#
+# Human goal (also in evaluation-demo/task.md):
+# Complete the migration adapter so the public catalog contract passes
+# independent health / API / GraphQL / browser / state checks.
+#
+# Machine companion (Zod TaskDefinition):
+companion: demo-task.json
+naturalLanguageCard: evaluation-demo/task.md
+mode: acceptance
+stack:
+  - Node.js
+  - GraphQL/HTTP demo surface
+  - Playwright (fake launcher by default)
+  - PostgreSQL/Redis available via Docker stack (optional for this demo)
+notes:
+  - Scenario compiler maps this card to demo-task.json
+  - Default agent path uses the public-catalog scenario agent (reference adapter)
+  - OpenHands is optional via PIPELINE_AGENT_MODE=openhands

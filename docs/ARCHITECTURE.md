@@ -1,120 +1,217 @@
-# Architecture (as-built Phase 1)
+# Architecture — adaptive engineering pipeline (vertical slice)
 
-This document describes the **implemented** Phase 1 control plane. Earlier design notes that assumed `network_mode: none` or a full monorepo under `packages/` are updated here to match the repo.
+Client target (briefing branch `codex/github-refactor-20260904`): an **adaptive engineering pipeline** with independent validation, evidence, safe recovery, and E2E/API checks — not a chatbot and not a giant hard-coded state machine.
 
-Guiding rules still hold: Docker-first isolation for the stack, bounded retries, independent validation, evidence over narration, no production access, **validator (not the agent) decides PASS/BLOCK**.
+This repository implements a **working vertical slice** of that loop. Full Vendure Batch 1+2 migration, Buzz multi-role orchestration, load testing, and red-team lanes are **deferred** (see [LIMITATIONS.md](./LIMITATIONS.md), [PHASE1_SCOPE.md](./PHASE1_SCOPE.md)).
 
-## 1. Control loop
+## 1. What we build (control loop)
 
 ```text
-1. Ingress
-     CLI: vendure-pipeline run --task <task.json|task.md>
-     or scenario scripts / start.sh --task …
-2. Safety preflight
-     Zod task parse + assertTaskSafe (allowlist, forbidden tools, URL/path rules)
-3. Isolated workspace
-     workspace/<runId>/ + artifacts/<runId>/
-     optional workspace-checkpoint/ before agent
-4. Agent (bounded)
-     mock | openhands | scenario-specific adapters
-     retries via RetryPolicy + circuit breaker
-5. Independent validator
-     runs validationSteps; ignores agent claimedSuccess
-6. Evidence pack
-     status, logs (redacted), diffs, validation JSON, summary.html, manifest
-7. Cleanup
-     optional workspace delete; Docker volumes via cleanup.sh
+                    ┌──────────────────────┐
+                    │  Natural Language    │
+                    │      Task Card       │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Scenario Compiler    │
+                    │ / PM Agent           │
+                    └──────────┬───────────┘
+                               │
+                     technical task.json
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Pipeline Controller  │
+                    │ / Safety Kernel      │
+                    └──────────┬───────────┘
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Autonomous Agent     │
+                    │ OpenHands/equivalent │
+                    └──────────┬───────────┘
+                               │
+                 ┌─────────────┼─────────────┐
+                 ▼             ▼             ▼
+             Code/CLI      Playwright     GraphQL/API
+                 │             │             │
+                 └─────────────┼─────────────┘
+                               ▼
+                    ┌──────────────────────┐
+                    │ Independent         │
+                    │ Validation Engine   │
+                    └──────────┬───────────┘
+                               │
+                         PASS / BLOCK
+                               │
+                               ▼
+                    ┌──────────────────────┐
+                    │ Evidence Package     │
+                    │ logs/screenshots/etc │
+                    └──────────────────────┘
 ```
 
-## 2. Components (where they live)
+Client reference loop (outcomes, not mandatory product names):
 
-| Component | Location | Notes |
-| --- | --- | --- |
-| Task schema / safety | `src/task/` | JSON Zod schema; `task.md` → companion JSON for known cards |
-| Pipeline controller | `src/controller/` | Agent loop, retries, handoff to validator |
-| Task runner / CLI | `src/execution/`, `src/cli/` | End-to-end flow + `npm run pipeline` |
-| Agents | `src/agent/` | `mock`, `openhands`, `noop` |
-| Scenario agents | `src/scenarios/*/` | Catalog / nail-patterns / failure demos |
-| Validator | `src/validator/` | Independent checks |
-| Validator CLI | `packages/validator/bin/validate.mjs` | Artifact-only re-check |
-| Evidence | `src/evidence/` | Bundle + finalize pack |
-| Safety / redaction | `src/safety/` | Paths, checkpoints, secret redaction, URL allowlists |
-| Retry | `src/retry/` | Failure kinds, budgets, circuit breaker |
-| Docker runner | `docker/`, `scripts/docker-stack.sh` | Compose: pipeline + postgres + redis |
-| GHA | `.github/workflows/pipeline.yml` | `workflow_dispatch`, allowlisted tasks |
+```text
+task card → scenario compilation → technical analysis → autonomous development
+  → evidence → independent validation → [load / red-team — deferred]
+  → cleanup / rollback
+```
 
-`packages/{scenario,safety,evidence,agent-adapter}` are **layout shims** for the Architecture package map; implementation code is under `src/`.
+**Design principle:** thin custom orchestration around an Agent runtime (OpenHands adapter or mock/scenario agents). The code-owned kernel owns permissions, allowlists, retries/circuit-break, evidence integrity, and **PASS/BLOCK**. The Agent never decides PASS.
 
-## 3. Repository layout
+### Vertical-slice status
+
+| Layer | Phase 1 status |
+| --- | --- |
+| Natural-language task card | Yes — `evaluation-demo/task.md` + business YAML cards under `tasks/` |
+| Scenario compiler | Yes — business goal → validationSteps (`src/compiler/`); known-card companions for demos |
+| Pipeline controller + safety kernel | Yes — `src/pipeline/`, `src/safety/` |
+| Autonomous agent | Yes — mock + OpenHands CLI adapter + scenario agents; default demo uses scenario/mock |
+| Code / Playwright / GraphQL-API checks | Yes — independent validator check types |
+| Independent PASS/BLOCK | Yes — in-process + `packages/validator` |
+| Evidence package | Yes — `artifacts/<runId>/` (runtime alias of `runs/`) |
+| Load testing / red-team | **Not** in this slice |
+| Buzz permanent multi-role team | **Not** in this slice |
+
+## 2. Repository structure
+
+Canonical layout (orchestration-facing names). Implementation may live in a sibling module and be re-exported — thin façade, not a second state machine.
 
 ```text
 vendure-ai-pipeline/
-  src/                 # Control plane implementation
-  packages/validator/  # validate.mjs + restore-checkpoint.mjs
-  fixtures/tasks/      # Sample JSON tasks
-  docker/              # Dockerfile + compose.yaml (internal network)
-  scripts/             # start/stop/check/cleanup + scenario runners
-  evaluation-demo/     # Public demo (incomplete catalog.mjs in tree)
-  artifacts/           # Default evidence (gitignored)
-  test/
-  docs/
-  .github/workflows/pipeline.yml
+├── src/
+│   ├── cli/
+│   │   ├── index.ts          # vendure-pipeline entry
+│   │   └── run.ts            # façade → CLI run
+│   ├── pipeline/
+│   │   ├── controller.ts     # agent loop + validator handoff
+│   │   ├── run-context.ts    # disposable run identity / dirs
+│   │   ├── task-loader.ts    # load task card / JSON / YAML companion
+│   │   └── result.ts         # RunResult / status helpers
+│   ├── compiler/
+│   │   ├── scenario-compiler.ts
+│   │   └── acceptance-schema.ts
+│   ├── agent/
+│   │   ├── agent-interface.ts
+│   │   ├── openhands-adapter.ts
+│   │   ├── mock-agent.ts
+│   │   └── …                 # factory, parsers, process runner
+│   ├── execution/
+│   │   ├── sandbox.ts        # allowlisted workspace boundary
+│   │   ├── command-runner.ts
+│   │   ├── workspace.ts
+│   │   ├── task-runner.ts
+│   │   └── …
+│   ├── validators/           # independent checks (façade)
+│   │   ├── validator.ts
+│   │   ├── health-validator.ts
+│   │   ├── graphql-validator.ts
+│   │   ├── api-validator.ts
+│   │   ├── browser-validator.ts
+│   │   └── database-validator.ts
+│   ├── recovery/
+│   │   ├── failure-classifier.ts
+│   │   ├── retry-policy.ts
+│   │   └── circuit-breaker.ts
+│   ├── evidence/
+│   │   ├── evidence-manager.ts
+│   │   ├── screenshot.ts
+│   │   └── report.ts
+│   ├── safety/
+│   │   ├── permissions.ts
+│   │   ├── resource-limits.ts
+│   │   ├── dangerous-actions.ts
+│   │   └── rollback.ts
+│   ├── config/
+│   │   └── config.ts
+│   ├── scenarios/            # vertical-slice demos (catalog, failure, nail-patterns)
+│   ├── validator/            # check engine implementation
+│   ├── controller/           # core controller implementation
+│   ├── task/                 # Zod task schema + safety
+│   └── retry/                # recovery implementation
+│
+├── tasks/                    # human + machine task cards
+│   ├── demo-task.yaml
+│   ├── demo-task.json
+│   ├── failure-recovery-task.yaml
+│   └── failure-recovery-task.json
+│
+├── validators/               # offline artifact validator surface
+│   └── README.md             # → packages/validator
+│
+├── docker/
+│   ├── Dockerfile
+│   └── compose.yaml
+│
+├── runs/                     # reserved evidence alias (see artifacts/)
+├── artifacts/                # default evidence root (gitignored)
+├── workspace/                # disposable workspaces (gitignored)
+│
+├── tests/
+│   ├── unit/
+│   ├── integration/
+│   └── e2e/
+│       └── README.md         # → repo `test/` runners
+│
+├── test/                     # actual Node test files (Phase 1)
+├── fixtures/tasks/           # additional JSON fixtures
+├── evaluation-demo/          # public client evaluation package
+├── scripts/                  # start/stop/check/cleanup + scenarios
+├── packages/                 # thin package surfaces (validator CLI)
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── QUICKSTART.md
+│   ├── VALIDATION.md
+│   ├── SAFETY.md
+│   └── LIMITATIONS.md
+├── .env.example
+├── package.json
+├── tsconfig.json
+└── README.md
 ```
 
-## 4. Isolation model
+### Module map (façade → implementation)
 
-| Surface | Isolation |
+| Proposed module | Implementation |
 | --- | --- |
-| Compose stack | `internal: true` bridge — no container egress, no published ports |
-| Host CLI / `start.sh --task` | Process on host; disposable workspace dir; SSRF allowlist for validator HTTP |
-| GHA | `ubuntu-latest`; task path allowlist; default `PIPELINE_ALLOW_NETWORK=false` |
+| `src/pipeline/controller.ts` | `src/controller/pipeline-controller.ts` |
+| `src/pipeline/task-loader.ts` | `src/compiler/scenario-compiler.ts` + `src/task/*` |
+| `src/compiler/*` | `src/task/task-card.ts`, `task-definition.ts` |
+| `src/recovery/*` | `src/retry/*` |
+| `src/validators/*` | `src/validator/*` + `checks/*` |
+| `src/execution/sandbox.ts` | `src/safety/execution-context.ts` |
+| `src/cli/run.ts` | `src/cli/index.ts` |
+| Evidence root `runs/` | Prefer `PIPELINE_ARTIFACTS_DIR=./artifacts` (compatible fields) |
 
-Compose is **not** `network_mode: none`; services can talk to each other (Postgres/Redis/pipeline). See [DOCKER_SETUP.md](./DOCKER_SETUP.md) and [SECURITY_LIMITATIONS.md](./SECURITY_LIMITATIONS.md).
+## 3. Isolation model (as-built)
 
-## 5. Validation model
-
-| Mode | Meaning | Exit |
-| --- | --- | --- |
-| `acceptance` | Checks must pass | 0 if `PASS`, else 1 |
-| `baseline` | Starter should fail acceptance | 0 if `BASELINE_BLOCKED_EXPECTED`, else 1 |
-| `full` | Reserved / same exit rules; not a separate long-chain gate in Phase 1 | — |
-
-Check types implemented: `evidence_present`, workspace file checks, `application_health`, `http_response`, `graphql_request`, `browser_playwright`, `database_state` (json_fixture / optional postgres), `path_invariant`, `redis_ping`, `postgres_ready`.
-
-HTTP destinations: loopback + `PIPELINE_NETWORK_ALLOWLIST`. Stack probes: `PIPELINE_STACK_HOST_ALLOWLIST`.
-
-## 6. Retry and safe-stop
-
-- Budgets: `PIPELINE_MAX_IDENTICAL_RETRIES`, `PIPELINE_MAX_TOTAL_ATTEMPTS`, timeout-specific limits in `RetryPolicy`
-- Recoverable kinds may retry the agent; unsafe / auth / validation-for-PASS do not chase green via agent retries
-- Secret-like / production indicators in agent text → safe-stop `BLOCK`
-
-## 7. Agents
-
-| Mode | Behavior |
+| Surface | Behavior |
 | --- | --- |
-| `mock` (default) | Deterministic fixture agent; no LLM |
-| `openhands` | Spawns OpenHands CLI with scrubbed env; **not** a hard OS sandbox |
-| Scenario agents | Catalog / nail-patterns / failure demos — purpose-built for demos |
+| Compose stack | `internal: true` — no egress, no published ports |
+| Host / scenario runs | Disposable `workspace/<runId>/`; SSRF allowlists for HTTP |
+| GHA | Allowlisted task paths; default `PIPELINE_ALLOW_NETWORK=false` |
 
-Public catalog demo defaults to its scenario agent unless `PIPELINE_AGENT_MODE=openhands`.
+Not `network_mode: none`. Details: [DOCKER_SETUP.md](./DOCKER_SETUP.md), [SECURITY_LIMITATIONS.md](./SECURITY_LIMITATIONS.md).
 
-## 8. Evidence
+## 4. Validation and recovery
 
-Canonical Phase 1 evidence root: `artifacts/<runId>/` (compatible fields with evaluation-demo `results/` shape: `run-manifest`, `status`, logs, diff/summary/rollback).
+- Validator ignores agent `claimedSuccess`.
+- Check types: evidence, workspace/files, health, HTTP, GraphQL, browser, database/json_fixture, path_invariant, redis/postgres probes.
+- Recovery: failure classifier + retry budgets + circuit breaker; unsafe/secret patterns → safe-stop `BLOCK`.
+- Modes: `acceptance`, `baseline` (`BASELINE_BLOCKED_EXPECTED`), `full` (reserved).
 
-Artifact CLI: `node packages/validator/bin/validate.mjs --run-dir …` — ignores agent summary; refuses forgeable `PASS` without validation check JSON.
-
-## 9. Out of Phase 1
-
-Deferred items remain listed in [PHASE1_SCOPE.md](./PHASE1_SCOPE.md) §3 and [LIMITATIONS.md](./LIMITATIONS.md): full Vendure storefront journeys, Stripe/Mailpit, Terraform, skill-doctor, etc.
-
-## 10. Smoke commands
+## 5. Smoke path
 
 ```bash
-npm ci && npm test && npm run build
+npm ci && npm test
 ./scripts/start.sh && ./scripts/check.sh
-npm run scenario:public-catalog
+./scripts/start.sh --task evaluation-demo/task.md
+# or: npm run pipeline -- run --task tasks/demo-task.json
 node packages/validator/bin/validate.mjs --run-dir artifacts/$(ls -1t artifacts | head -1)
 ./scripts/cleanup.sh
 ```
+
+Full evaluator script: [FINAL_DEMO.md](./FINAL_DEMO.md).

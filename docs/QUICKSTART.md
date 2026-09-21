@@ -164,7 +164,9 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 
 ## Next reading
 
+- [TASK_CARD.md](./TASK_CARD.md) — business goal → machine metrics  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
+- [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  
 - [LIMITATIONS.md](./LIMITATIONS.md) — honest non-claims  
 - [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — common failures  

@@ -40,7 +40,9 @@ See [docs/LIMITATIONS.md](docs/LIMITATIONS.md) and [docs/SECURITY_LIMITATIONS.md
 5. Evidence & PASS/BLOCK — [docs/VALIDATION.md](docs/VALIDATION.md)  
 6. Failure/recovery — QUICKSTART § Failure demos + [docs/FAILURE_DEMO.md](docs/FAILURE_DEMO.md)  
 7. Architecture — [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)  
-8. Stuck? — [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+8. Evaluator clean-room demo — [docs/FINAL_DEMO.md](docs/FINAL_DEMO.md)  
+9. Delivery gate — [docs/DELIVERY_CHECKLIST.md](docs/DELIVERY_CHECKLIST.md)  
+10. Stuck? — [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
 
 ```bash
 git clone <this-repo>
@@ -58,16 +60,23 @@ node packages/validator/bin/validate.mjs --run-dir artifacts/<run_id>
 ## Layout
 
 ```text
-src/                  Control plane (controller, agent, validator, evidence, safety)
-packages/             Thin package surfaces; validator CLI is the main entry
-fixtures/tasks/       Sample JSON tasks
-docker/               Dockerfile + Compose
+src/pipeline|compiler|agent|execution|validators|recovery|evidence|safety|config
+                      Adaptive control-loop façades (thin orchestration)
+src/controller|task|validator|retry|scenarios
+                      Core implementations behind the façades
+tasks/                Human YAML cards + machine JSON companions
+validators/           Pointer to offline artifact validator CLI
+fixtures/tasks/       Additional JSON fixtures
+docker/               Dockerfile + Compose (internal network)
 scripts/              start/stop/check/cleanup, scenario runners
-evaluation-demo/      Public demo package (baseline incomplete catalog.mjs)
-artifacts/            Default evidence root (gitignored)
-.github/workflows/    workflow_dispatch
-docs/                 Handover + client briefing docs
+evaluation-demo/      Public client evaluation package
+artifacts/ | runs/    Evidence roots (default: artifacts/)
+tests/                Layout mirror; executable tests in test/
+packages/             Validator CLI surface
+docs/                 ARCHITECTURE, SAFETY, VALIDATION, LIMITATIONS, …
 ```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the control-loop diagram and module map.
 
 ## Security boundary
 

@@ -1,0 +1,14 @@
+# Failure / recovery demonstration task card
+#
+# Proves: controlled bug → classify → bounded repair → PASS
+#          unsafe failure → safe-stop → BLOCK (no repair)
+#
+# Prefer npm scripts for the full demo loop:
+#   npm run scenario:failure-recoverable
+#   npm run scenario:failure-unrecoverable
+#
+companion: failure-recovery-task.json
+mode: acceptance
+notes:
+  - Machine task below is the catalog E2E shape used inside the failure demo workspace
+  - Repair budget and unsafe stop are enforced by the failure-demo controller, not agent prose

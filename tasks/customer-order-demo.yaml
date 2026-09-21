@@ -1,0 +1,16 @@
+id: customer-order-demo
+
+goal: >
+  A customer should be able to browse a product,
+  add it to the cart and complete the checkout flow.
+
+acceptance:
+  - storefront loads
+  - product is visible
+  - product can be added to cart
+  - checkout can be started
+  - order is created
+  - backend contains the order
+
+environment:
+  target: isolated-vendure

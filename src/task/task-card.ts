@@ -7,6 +7,8 @@ import { loadTaskDefinitionFromJsonFile, TaskDefinitionError } from './task-defi
 const TASK_MD_COMPANIONS: Record<string, string> = {
   'evaluation-demo/task.md': 'fixtures/tasks/vendure-public-catalog-e2e.json',
   'task.md': 'fixtures/tasks/vendure-public-catalog-e2e.json',
+  'tasks/demo-task.yaml': 'tasks/demo-task.json',
+  'tasks/failure-recovery-task.yaml': 'tasks/failure-recovery-task.json',
 };
 
 /**
