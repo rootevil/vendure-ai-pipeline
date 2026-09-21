@@ -40,24 +40,37 @@ Useful defaults:
 | `PIPELINE_ALLOW_NETWORK` | `false` | Validator HTTP denied unless scenario enables loopback |
 | `PIPELINE_WRITE_ALLOWLIST` | `src,app,evaluation-demo/app` | Host config allowlist (tasks also declare their own) |
 
-## 3. Start Docker
+## 3. Start Docker, then run the client demo
 
 ```bash
-# macOS + Colima example
-colima start --cpu 2 --memory 4 --disk 20
-export DOCKER_HOST=unix://$HOME/.colima/docker.sock
-
-./scripts/start.sh
-./scripts/check.sh
+docker compose up -d
+npm run pipeline -- tasks/demo-task.yaml
 ```
 
-`start.sh` without `--task` builds/starts Postgres, Redis, and the pipeline keep-alive container on an **internal** Compose network (no egress, no host ports). Details: [DOCKER_SETUP.md](./DOCKER_SETUP.md).
+Expected stdout:
+
+```text
+[PIPELINE] Task received
+[COMPILER] Creating acceptance criteria
+[AGENT] Starting isolated workspace
+[AGENT] Inspecting repository
+[AGENT] Implementing changes
+[VALIDATOR] Running API checks
+[VALIDATOR] Running Playwright
+[VALIDATOR] Checking database
+[EVIDENCE] Collecting artifacts
+[RESULT] PASS
+```
+
+Evidence lands under `runs/<runId>/` (`final-report.html` and the rest of the package). Postgres and Redis come up with Compose; the demo task itself uses the isolated public-catalog surface (loopback), not production.
+
+`docker compose` reads the root `compose.yaml`, which includes `docker/compose.yaml` (internal network, no host ports). Equivalent: `./scripts/start.sh`.
 
 Stop / wipe:
 
 ```bash
-./scripts/stop.sh      # keep volumes
-./scripts/cleanup.sh   # remove disposable volumes
+docker compose down          # keep volumes
+./scripts/cleanup.sh         # remove disposable volumes
 ```
 
 ## 4. Run the pipeline (JSON task)

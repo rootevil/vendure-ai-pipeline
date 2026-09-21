@@ -1,0 +1,5 @@
+# Client demo entrypoint.
+# `docker compose up -d` from the repository root.
+# Paths inside docker/compose.yaml stay relative to that file.
+include:
+  - path: docker/compose.yaml

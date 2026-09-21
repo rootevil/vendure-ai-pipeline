@@ -16,9 +16,12 @@ import {
 
 export interface PublicCatalogScenarioOptions {
   readonly rootDir?: string;
+  readonly artifactsDir?: string;
+  readonly workspaceDir?: string;
   readonly runId?: string;
   readonly keepWorkspace?: boolean;
   readonly useRealBrowser?: boolean;
+  readonly logLevel?: 'debug' | 'info' | 'warn' | 'error';
 }
 
 export interface PublicCatalogScenarioResult {
@@ -36,8 +39,8 @@ export async function runPublicCatalogScenario(
 ): Promise<PublicCatalogScenarioResult> {
   const root = options.rootDir ?? mkdtempSync(join(tmpdir(), 'vendure-catalog-scenario-'));
   const runId = options.runId ?? `catalog-${Date.now()}`;
-  const workspaceDir = join(root, 'workspace');
-  const artifactsDir = join(root, 'artifacts');
+  const workspaceDir = options.workspaceDir ?? join(root, 'workspace');
+  const artifactsDir = options.artifactsDir ?? join(root, 'artifacts');
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(artifactsDir, { recursive: true });
 
@@ -63,7 +66,7 @@ export async function runPublicCatalogScenario(
       maxIdenticalRetries: task.retryPolicy.maxIdenticalRetries,
       maxTotalAttempts: task.retryPolicy.maxTotalAttempts,
       allowNetwork: true,
-      logLevel: 'info',
+      logLevel: options.logLevel ?? 'info',
       runId,
       writeAllowlist: [...task.writeAllowlist],
       agentMode,
@@ -74,7 +77,7 @@ export async function runPublicCatalogScenario(
 
     const runner = new TaskRunner({
       config,
-      logger: createLogger({ level: 'info' }),
+      logger: createLogger({ level: options.logLevel ?? 'info' }),
       // Default: purpose-built scenario agent applying the published reference adapter.
       // Set PIPELINE_AGENT_MODE=openhands to exercise the OpenHands adapter instead.
       ...(agentMode === 'openhands'

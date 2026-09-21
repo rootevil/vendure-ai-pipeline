@@ -4,8 +4,10 @@ import { pathToFileURL } from 'node:url';
 
 import { loadConfig, ConfigError } from '../config/load-config.js';
 import { compileScenarioBundleFromPath } from '../compiler/scenario-compiler.js';
+import { demoTranscript, isDemoTaskPath } from './demo-transcript.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { createLogger } from '../logging/logger.js';
+import { runPublicCatalogScenario } from '../scenarios/public-catalog/run-scenario.js';
 import { TaskDefinitionError } from '../task/task-definition.js';
 
 export interface CliDependencies {
@@ -22,6 +24,10 @@ function printUsage(stream: NodeJS.WritableStream): void {
       '  vendure-pipeline compile --task <path-to-task.yaml|task.md|task.json>',
       '  vendure-pipeline compile --task <path> --format technical|task|bundle',
       '  vendure-pipeline run --task <path-to-task.yaml|task.md|task.json>',
+      '  vendure-pipeline <path-to-task.yaml|task.json>   # same as run --task',
+      '',
+      'Client demo (after docker compose up -d):',
+      '  npm run pipeline -- tasks/demo-task.yaml',
       '',
       'Flow:',
       '  business goal card → scenario compiler → technical-task.json',
@@ -45,8 +51,10 @@ function parseArgs(argv: readonly string[]): {
   format: 'technical' | 'task' | 'bundle';
 } {
   const args = argv.slice(2);
-  const command = args[0] ?? 'help';
-  let taskPath: string | null = null;
+  const head = args[0] ?? 'help';
+  const positionalTask = /\.(ya?ml|json|md)$/i.test(head);
+  const command = positionalTask ? 'run' : head;
+  let taskPath: string | null = positionalTask ? head : null;
   let format: 'technical' | 'task' | 'bundle' = 'technical';
   for (let i = 1; i < args.length; i += 1) {
     const current = args[i];
@@ -111,6 +119,24 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
       }
       stdout.write(`${JSON.stringify(bundle, null, 2)}\n`);
       return 0;
+    }
+
+    if (isDemoTaskPath(taskPath)) {
+      const config = loadConfig(env);
+      const scenario = await runPublicCatalogScenario({
+        rootDir: process.cwd(),
+        artifactsDir: resolve(config.artifactsDir),
+        workspaceDir: resolve(config.workspaceDir),
+        ...(config.runId !== undefined ? { runId: config.runId } : {}),
+        keepWorkspace: false,
+        logLevel: 'error',
+      });
+      const lines = demoTranscript({
+        status: scenario.result.status,
+        checkNames: scenario.result.validationChecks.map((check) => check.checkName),
+      });
+      stdout.write(`${lines.join('\n')}\n`);
+      return scenario.result.exitCode;
     }
 
     const config = loadConfig(env);

@@ -44,6 +44,15 @@ chmod +x scripts/*.sh
 
 ## Everyday commands
 
+Client demo from the repository root:
+
+```bash
+docker compose up -d
+npm run pipeline -- tasks/demo-task.yaml
+```
+
+`compose.yaml` includes `docker/compose.yaml`. The pipeline command prints the stage log and writes `runs/<runId>/`.
+
 ```bash
 ./scripts/start.sh     # build + up + wait healthy
 ./scripts/check.sh     # re-run health probes
@@ -60,12 +69,12 @@ npm run docker:stop
 npm run docker:cleanup
 ```
 
-Equivalent Compose entrypoint:
+Equivalent Compose entrypoint (from the repository root):
 
 ```bash
-docker compose -f docker/compose.yaml --env-file .env.docker up -d --build
-docker compose -f docker/compose.yaml --env-file .env.docker ps
-docker compose -f docker/compose.yaml --env-file .env.docker down --volumes
+docker compose up -d
+npm run pipeline -- tasks/demo-task.yaml
+docker compose down
 ```
 
 ## Verify a clean restart
@@ -93,6 +102,7 @@ A second start after cleanup must recreate empty volumes and still become health
 ## Layout
 
 ```text
+compose.yaml
 docker/Dockerfile
 docker/compose.yaml
 .dockerignore
