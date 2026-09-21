@@ -1,23 +1,38 @@
-# Failure demonstration (Phase 9)
+# Failure demonstration (autonomous debugging)
 
 Proves autonomous debugging on the public catalog scenario without hardcoding PASS.
 
+See also [AUTONOMOUS_DEBUGGING.md](./AUTONOMOUS_DEBUGGING.md) for the client recovery narrative.
+
 ## Recoverable path
 
-```
-controlled bug → detect → classify → repair brief for Agent
-  → bounded repair → targeted validation → broader validation → PASS|BLOCK
+```text
+Deliberate failure (product set wrong on storefront)
+  ↓
+Capture logs / preserve failed-state/
+  ↓
+Classify → repair brief (reversible step)
+  ↓
+Agent investigates → smallest fix
+  ↓
+Targeted reproducer → regression / independent validation
+  ↓
+PASS | BLOCK  (circuit-break on repeated identical failures)
 ```
 
 ```bash
 npm run scenario:failure-recoverable
+npm run scenario:autonomous-debugging
 ```
 
-Expected: `"status": "PASS"` after exactly one repair attempt. Evidence includes `failure-demo.json` with the step timeline.
+Expected: `"status": "PASS"` after exactly one repair attempt. Evidence includes:
+
+- `failure-demo.json` — step timeline + `recoveryProcess` + expected/actual
+- `failed-state/` — preserved pre-repair logs and buggy catalog snapshot
 
 ## Unrecoverable path
 
-```
+```text
 unsafe/secret failure → classify → immediate stop → BLOCK + evidence
 ```
 

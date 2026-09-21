@@ -18,6 +18,7 @@ const summary = {
   steps: demo.steps,
   artifactDir: demo.result.artifactDir,
   failureDemoJson: `${demo.result.artifactDir}/failure-demo.json`,
+  failedStateDir: `${demo.result.artifactDir}/failed-state`,
   summaryHtml: `${demo.result.artifactDir}/summary.html`,
   evidenceManifest: demo.evidenceManifest
     ? `${demo.result.artifactDir}/evidence-manifest.json`

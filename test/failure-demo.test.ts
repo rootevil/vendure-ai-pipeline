@@ -24,23 +24,40 @@ test('recoverable failure demo repairs then PASSes broader validation', async ()
     assert.equal(demo.result.exitCode, 0);
     assert.equal(demo.repairAttempts, 1);
     assert.ok(demo.steps.some((step) => step.name === 'inject-controlled-failure' && step.ok));
+    assert.ok(demo.steps.some((step) => step.name === 'deliberate-failure' && step.ok));
     assert.ok(demo.steps.some((step) => step.name === 'targeted-validation-initial' && !step.ok));
+    assert.ok(demo.steps.some((step) => step.name === 'capture-logs' && step.ok));
     assert.ok(demo.steps.some((step) => step.name === 'classify-failure'));
     assert.ok(demo.steps.some((step) => step.name === 'provide-repair-evidence' && step.ok));
+    assert.ok(demo.steps.some((step) => step.name === 'agent-investigates' && step.ok));
     assert.ok(demo.steps.some((step) => step.name.startsWith('bounded-repair-attempt-')));
+    assert.ok(demo.steps.some((step) => step.name === 'smallest-fix' && step.ok));
     assert.ok(
       demo.steps.some((step) => step.name === 'targeted-validation-after-repair-1' && step.ok),
     );
+    assert.ok(demo.steps.some((step) => step.name === 'run-targeted-reproducer' && step.ok));
     assert.ok(demo.steps.some((step) => step.name === 'broader-validation' && step.ok));
+    assert.ok(
+      demo.steps.some((step) => step.name === 'run-regression-independent-validation' && step.ok),
+    );
 
     assert.ok(existsSync(join(demo.result.artifactDir, 'failure-demo.json')));
+    assert.ok(existsSync(join(demo.result.artifactDir, 'failed-state', 'failure-snapshot.json')));
+    assert.ok(existsSync(join(demo.result.artifactDir, 'failed-state', 'catalog.mjs.failed')));
     assert.ok(existsSync(join(demo.result.artifactDir, 'result.json')));
     assert.ok(existsSync(join(demo.result.artifactDir, 'summary.html')));
     const payload = JSON.parse(
       readFileSync(join(demo.result.artifactDir, 'failure-demo.json'), 'utf8'),
-    ) as { status: string; repairAttempts: number };
+    ) as {
+      status: string;
+      repairAttempts: number;
+      deliberateFailure: { expected: string; actual: string };
+      recoveryProcess: string[];
+    };
     assert.equal(payload.status, 'PASS');
     assert.equal(payload.repairAttempts, 1);
+    assert.ok(payload.deliberateFailure.expected.includes('storefront'));
+    assert.ok(payload.recoveryProcess.includes('Classify failure'));
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

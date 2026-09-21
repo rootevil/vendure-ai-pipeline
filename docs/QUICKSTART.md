@@ -112,8 +112,9 @@ npm run scenario:nail-patterns
 ### Failure / recovery
 
 ```bash
-npm run scenario:failure-recoverable     # detect → one repair → PASS
-npm run scenario:failure-unrecoverable   # unsafe → BLOCK, no repair
+npm run scenario:failure-recoverable     # autonomous debugging → one repair → PASS
+    npm run scenario:autonomous-debugging    # alias of failure-recoverable
+    npm run scenario:failure-unrecoverable   # unsafe → BLOCK, no repair
 ```
 
 See [FAILURE_DEMO.md](./FAILURE_DEMO.md).
@@ -170,6 +171,7 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 - [BROWSER_VALIDATION.md](./BROWSER_VALIDATION.md) — Playwright storefront → checkout demo  
 - [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md) — independent Shop API evidence after browser  
 - [DATABASE_VALIDATION.md](./DATABASE_VALIDATION.md) — controlled order SQL expected vs actual  
+- [AUTONOMOUS_DEBUGGING.md](./AUTONOMOUS_DEBUGGING.md) — deliberate failure → recover → validate  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
 - [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  

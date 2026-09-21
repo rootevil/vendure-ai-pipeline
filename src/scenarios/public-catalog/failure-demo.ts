@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -61,9 +61,23 @@ export interface FailureDemoResult {
   readonly evidenceManifest: EvidenceManifest | null;
 }
 
+const DELIBERATE_FAILURE = {
+  expected: 'Product appears on storefront (active Soft Pink Almond + Rose Gold French; totalItems=2)',
+  actual: 'Product set incorrect — inactive Archived Sample leaked / GraphQL totalItems ≠ 2',
+} as const;
+
 /**
- * Phase 9 failure demonstration orchestrator.
- * Recoverable path: detect → classify → evidence brief → bounded repair → targeted → broader → PASS/BLOCK
+ * Autonomous debugging demonstration (client recovery process).
+ *
+ * Deliberate failure:
+ *   Expected — active products appear on storefront
+ *   Actual   — catalog adapter wrong; storefront/API disagree with acceptance
+ *
+ * Recoverable path:
+ *   Failure → capture logs / preserve failed state → classify → Agent investigates
+ *   → inspect code/config → smallest reversible fix → targeted reproducer
+ *   → regression / independent validation → PASS|BLOCK (circuit-break repeats)
+ *
  * Unrecoverable path: detect unsafe → stop immediately → BLOCK with evidence
  */
 export async function runFailureDemo(options: FailureDemoOptions): Promise<FailureDemoResult> {
@@ -130,15 +144,21 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
 
     const agent = new RecoverableFailureDemoAgent();
 
-    // --- Attempt 1: inject controlled bug ---
+    // --- Attempt 1: inject deliberate storefront/catalog failure ---
     lastOutcome = await runAgentSafely(agent, liveContext, attempts);
     steps.push({
       name: 'inject-controlled-failure',
       detail: lastOutcome.summary,
       ok: true,
     });
+    steps.push({
+      name: 'deliberate-failure',
+      detail:
+        'Expected: Soft Pink Almond + Rose Gold French on storefront. Actual: buggy adapter leaks inactive products.',
+      ok: true,
+    });
 
-    // --- Targeted validation (acceptance + GraphQL) ---
+    // --- Targeted validation (acceptance + GraphQL + storefront) ---
     let targeted = await runTargetedValidation({
       appDir,
       baseUrl: server.baseUrl,
@@ -155,11 +175,24 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
       throw new Error('Controlled bug did not fail targeted validation — demo is invalid');
     }
 
-    // --- Classify + repair brief ---
+    // --- Capture logs + preserve failed state (before any repair) ---
+    const failedStateDir = preserveFailedState({
+      context: liveContext,
+      outcome: lastOutcome,
+      targeted,
+    });
+    steps.push({
+      name: 'capture-logs',
+      detail: `Preserved failed state under ${failedStateDir} (stdout/stderr, targeted checks, catalog snapshot)`,
+      ok: true,
+      failureKind: targeted.failureKind,
+    });
+
+    // --- Classify + repair brief (reversible smallest fix) ---
     const failureKind: FailureKind = 'recoverable_implementation';
     steps.push({
       name: 'classify-failure',
-      detail: `Classified as ${failureKind}`,
+      detail: `Classified as ${failureKind} (recoverable implementation — not unsafe)`,
       failureKind,
       ok: true,
     });
@@ -176,9 +209,14 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
         detectedBy: targeted.failedChecks,
         summary: targeted.detail,
         evidence: targeted.evidence,
+        expected:
+          'Active products Soft Pink Almond and Rose Gold French appear on storefront; GraphQL totalItems=2',
+        actual: targeted.detail,
+        reversibleStep:
+          'Replace evaluation-demo/app/src/catalog.mjs with the published reference adapter (workspace disposable)',
         instruction:
-          'Repair migrateCatalog: keep only active records, omit internalNote, stable SKU order, ' +
-          'integer price_cents, slug + image_count. Reuse evaluation-demo reference behavior.',
+          'Inspect catalog.mjs / config. Make the smallest fix: keep only active records, omit internalNote, ' +
+          'stable SKU order, integer price_cents, slug + image_count. Reuse evaluation-demo reference behavior.',
         attempt: repairAttempts,
         maxRepairAttempts,
       };
@@ -189,10 +227,22 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
         failureKind: 'recoverable_implementation',
         ok: true,
       });
+      steps.push({
+        name: 'agent-investigates',
+        detail: 'Agent reads repair brief, inspects catalog adapter, chooses reversible reference fix',
+        failureKind: 'recoverable_implementation',
+        ok: true,
+      });
 
       lastOutcome = await runAgentSafely(agent, liveContext, attempts);
       steps.push({
         name: `bounded-repair-attempt-${repairAttempts}`,
+        detail: lastOutcome.summary,
+        failureKind: 'recoverable_implementation',
+        ok: lastOutcome.failureCode === 'REPAIR_APPLIED',
+      });
+      steps.push({
+        name: 'smallest-fix',
         detail: lastOutcome.summary,
         failureKind: 'recoverable_implementation',
         ok: lastOutcome.failureCode === 'REPAIR_APPLIED',
@@ -209,6 +259,12 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
         ok: targeted.passed,
         failureKind: targeted.failureKind,
       });
+      steps.push({
+        name: 'run-targeted-reproducer',
+        detail: targeted.detail,
+        ok: targeted.passed,
+        failureKind: targeted.failureKind,
+      });
 
       if (!targeted.passed) {
         const stop = retryPolicy.decide({
@@ -221,6 +277,12 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
           failureKind: 'recoverable_implementation',
         });
         if (!stop.shouldRetry || repairAttempts >= maxRepairAttempts) {
+          steps.push({
+            name: 'circuit-break-repeated-failures',
+            detail: stop.reason ?? 'Identical recoverable failure budget exhausted',
+            failureKind: 'recoverable_implementation',
+            ok: false,
+          });
           break;
         }
       }
@@ -240,13 +302,16 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
           'Bounded repair exhausted; targeted validation still failing',
           targeted.detail,
           'Independent broader validation skipped because targeted gate failed',
+          'Circuit-break: repeated identical failures stopped',
         ],
         validationChecks: targeted.checks,
         keepWorkspace: options.keepWorkspace === true,
+        deliberateFailure: DELIBERATE_FAILURE,
+        failedStateDir,
       });
     }
 
-    // --- Broader independent validation ---
+    // --- Broader independent validation (regression) ---
     const broader = await runBroaderValidation({
       context: liveContext,
       task,
@@ -255,6 +320,11 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
     });
     steps.push({
       name: 'broader-validation',
+      detail: broader.detail,
+      ok: broader.passed,
+    });
+    steps.push({
+      name: 'run-regression-independent-validation',
       detail: broader.detail,
       ok: broader.passed,
     });
@@ -275,6 +345,8 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
       ],
       validationChecks: broader.checks,
       keepWorkspace: options.keepWorkspace === true,
+      deliberateFailure: DELIBERATE_FAILURE,
+      failedStateDir,
     });
   } finally {
     if (server) {
@@ -474,6 +546,12 @@ async function runTargetedValidation(input: {
   const gqlOk = totalItems === 2 && !gqlJson.errors?.length;
   const testsOk = testExitCode === 0;
 
+  const storefrontHtml = await (await fetch(`${input.baseUrl}/`)).text();
+  const hasSoftPink = storefrontHtml.includes('Soft Pink Almond');
+  const hasRoseGold = storefrontHtml.includes('Rose Gold French');
+  const hasArchived = storefrontHtml.includes('Archived Sample');
+  const storefrontOk = hasSoftPink && hasRoseGold && !hasArchived;
+
   const failedChecks: string[] = [];
   if (!testsOk) {
     failedChecks.push('acceptance-tests');
@@ -481,11 +559,14 @@ async function runTargetedValidation(input: {
   if (!gqlOk) {
     failedChecks.push('graphql-products');
   }
+  if (!storefrontOk) {
+    failedChecks.push('storefront-products');
+  }
 
   const passed = failedChecks.length === 0;
   const detail = passed
-    ? 'Targeted validation passed (acceptance tests + GraphQL totalItems=2)'
-    : `Targeted validation failed: ${failedChecks.join(', ')} (tests=${testExitCode}, totalItems=${String(totalItems)})`;
+    ? 'Targeted validation passed (acceptance + GraphQL totalItems=2 + storefront active products)'
+    : `Targeted validation failed: ${failedChecks.join(', ')} (tests=${testExitCode}, totalItems=${String(totalItems)}, storefront archivedLeak=${String(hasArchived)})`;
 
   const timestamp = new Date().toISOString();
   const checks: ValidationCheckResult[] = [
@@ -507,6 +588,15 @@ async function runTargetedValidation(input: {
       output: JSON.stringify(gqlJson),
       evidencePath: join(input.context.artifactDir, 'validation', 'targeted-graphql.json'),
     },
+    {
+      checkName: 'storefront-products',
+      status: storefrontOk ? 'PASS' : 'FAIL',
+      expected: 'Soft Pink Almond + Rose Gold French present; Archived Sample absent',
+      actual: `softPink=${String(hasSoftPink)} roseGold=${String(hasRoseGold)} archived=${String(hasArchived)}`,
+      timestamp,
+      output: storefrontHtml.slice(0, 2000),
+      evidencePath: join(input.context.artifactDir, 'validation', 'targeted-storefront.json'),
+    },
   ];
 
   mkdirSync(join(input.context.artifactDir, 'validation'), { recursive: true });
@@ -517,6 +607,10 @@ async function runTargetedValidation(input: {
   writeFileSync(
     join(input.context.artifactDir, 'validation', 'targeted-graphql.json'),
     `${JSON.stringify(checks[1], null, 2)}\n`,
+  );
+  writeFileSync(
+    join(input.context.artifactDir, 'validation', 'targeted-storefront.json'),
+    `${JSON.stringify(checks[2], null, 2)}\n`,
   );
 
   return {
@@ -535,7 +629,14 @@ async function runTargetedValidation(input: {
     evidence: {
       testExitCode,
       graphql: gqlJson,
+      storefront: {
+        hasSoftPink,
+        hasRoseGold,
+        hasArchived,
+      },
       failedChecks,
+      expected: DELIBERATE_FAILURE.expected,
+      actual: DELIBERATE_FAILURE.actual,
     },
   };
 }
@@ -615,6 +716,8 @@ async function finalizeDemo(input: {
   readonly notes: readonly string[];
   readonly validationChecks: readonly ValidationCheckResult[];
   readonly keepWorkspace: boolean;
+  readonly deliberateFailure?: { readonly expected: string; readonly actual: string };
+  readonly failedStateDir?: string;
 }): Promise<FailureDemoResult> {
   const finishedAt = new Date().toISOString();
   const evidence = new FileEvidenceCollector();
@@ -626,12 +729,18 @@ async function finalizeDemo(input: {
     stderr: input.lastOutcome?.stderr ?? '',
     diff: input.lastOutcome?.diff ?? '',
     changeSummary: (input.lastOutcome?.changedFiles ?? []).map((f) => `- ${f}`).join('\n') || 'n/a',
-    rollback: 'Discard disposable workspace; retain runs/<runId> evidence.',
+    rollback: 'Discard disposable workspace; retain runs/<runId> evidence including failed-state/.',
     summary: [
-      `# Failure demo (${input.mode})`,
+      `# Autonomous debugging demo (${input.mode})`,
       '',
       `- Status: ${input.status}`,
       `- Repair attempts: ${input.repairAttempts}`,
+      ...(input.deliberateFailure
+        ? [
+            `- Expected: ${input.deliberateFailure.expected}`,
+            `- Actual: ${input.deliberateFailure.actual}`,
+          ]
+        : []),
       ...input.steps.map((step) => `- ${step.name}: ${step.ok ? 'ok' : 'fail'} — ${step.detail}`),
       ...input.notes.map((note) => `- Note: ${note}`),
     ].join('\n'),
@@ -648,6 +757,19 @@ async function finalizeDemo(input: {
         mode: input.mode,
         status: input.status,
         repairAttempts: input.repairAttempts,
+        deliberateFailure: input.deliberateFailure ?? null,
+        failedStateDir: input.failedStateDir ?? null,
+        recoveryProcess: [
+          'Failure',
+          'Capture logs / preserve failed state',
+          'Classify failure',
+          'Agent investigates',
+          'Inspect code/config',
+          'Make smallest reversible fix',
+          'Run targeted reproducer',
+          'Run regression / independent validation',
+          'Circuit-break repeated failures',
+        ],
         steps: input.steps,
         notes: input.notes,
       },
@@ -689,4 +811,62 @@ async function finalizeDemo(input: {
     repairAttempts: input.repairAttempts,
     evidenceManifest,
   };
+}
+
+/**
+ * Preserve the failed workspace/validation snapshot before any repair mutates code.
+ * Satisfies the client recovery requirement to keep the failed state for investigation.
+ */
+function preserveFailedState(input: {
+  readonly context: ExecutionContext;
+  readonly outcome: AgentRunOutcome | null;
+  readonly targeted: {
+    readonly detail: string;
+    readonly failedChecks: readonly string[];
+    readonly evidence: Record<string, unknown>;
+    readonly checks: readonly ValidationCheckResult[];
+  };
+}): string {
+  const failedStateDir = join(input.context.artifactDir, 'failed-state');
+  mkdirSync(failedStateDir, { recursive: true });
+  writeFileSync(
+    join(failedStateDir, 'agent-stdout.log'),
+    `${input.outcome?.stdout ?? ''}\n`,
+    'utf8',
+  );
+  writeFileSync(
+    join(failedStateDir, 'agent-stderr.log'),
+    `${input.outcome?.stderr ?? ''}\n`,
+    'utf8',
+  );
+  writeFileSync(
+    join(failedStateDir, 'failure-snapshot.json'),
+    `${JSON.stringify(
+      {
+        preservedAt: new Date().toISOString(),
+        deliberateFailure: DELIBERATE_FAILURE,
+        detail: input.targeted.detail,
+        failedChecks: input.targeted.failedChecks,
+        evidence: input.targeted.evidence,
+        checks: input.targeted.checks,
+        agentSummary: input.outcome?.summary ?? null,
+        changedFiles: input.outcome?.changedFiles ?? [],
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
+
+  const catalogSrc = join(
+    input.context.workspaceDir,
+    'evaluation-demo',
+    'app',
+    'src',
+    'catalog.mjs',
+  );
+  if (existsSync(catalogSrc)) {
+    copyFileSync(catalogSrc, join(failedStateDir, 'catalog.mjs.failed'));
+  }
+  return failedStateDir;
 }

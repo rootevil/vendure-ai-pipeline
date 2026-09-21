@@ -11,7 +11,7 @@ Evaluator-facing script. Every command below was executed successfully in a rehe
 | Isolated run + agent + validation + evidence + PASS | `./scripts/start.sh --task evaluation-demo/task.md` |
 | Independent re-check of evidence | `packages/validator/bin/validate.mjs` |
 | Controlled failure (incomplete starter) | `evaluation-demo/scripts/verify.sh --baseline` |
-| Bounded recovery → PASS | `npm run scenario:failure-recoverable` |
+| Bounded recovery / autonomous debugging → PASS | `npm run scenario:autonomous-debugging` |
 | Unrecoverable → BLOCK | `npm run scenario:failure-unrecoverable` |
 | Final report | `artifacts/<runId>/report.md` (+ `summary.html`) |
 | Cleanup | `./scripts/cleanup.sh` |
@@ -204,21 +204,24 @@ bash evaluation-demo/scripts/verify.sh --baseline
 
 Expected: `"status": "BASELINE_BLOCKED_EXPECTED"`, process exit `0` (baseline correctly blocked). Acceptance test output shows empty actual vs expected products.
 
-### 9. Demonstrate bounded recovery
+### 9. Demonstrate autonomous debugging (recoverable)
 
 ```bash
-npm run scenario:failure-recoverable
+npm run scenario:autonomous-debugging
+# or: npm run scenario:failure-recoverable
 ```
 
 Expected: `"status": "PASS"`, `"repairAttempts": 1`, exit `0`.  
-Printed `artifactDir` / `failureDemoJson` (often under the OS temp directory). Inspect:
+Deliberate failure: expected products on storefront vs buggy catalog leaking inactive items.
 
 ```bash
-# Use the printed artifactDir from the command output:
 cat "<artifactDir>/failure-demo.json"
+ls "<artifactDir>/failed-state/"
 ```
 
-Timeline must include: inject controlled bug → targeted validation fail → classify → repair brief → one repair → targeted pass → broader `PASS`.
+Timeline must include: deliberate failure → capture logs / preserve failed state → classify → agent investigates → smallest fix → targeted reproducer → regression independent validation → `PASS`.
+
+Details: [AUTONOMOUS_DEBUGGING.md](./AUTONOMOUS_DEBUGGING.md).
 
 ### 10. Demonstrate unrecoverable failure → BLOCK
 

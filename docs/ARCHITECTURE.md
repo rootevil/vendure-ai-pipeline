@@ -74,6 +74,7 @@ task card → scenario compilation → technical analysis → autonomous develop
 | Independent PASS/BLOCK | Yes — in-process + `packages/validator`; client verdict in `validator-verdict.json` |
 | Evidence package | Yes — `artifacts/<runId>/` (runtime alias of `runs/`) |
 | Load testing / red-team | **Not** in this slice |
+| Autonomous debugging / recovery | Yes — deliberate failure → preserve state → classify → repair → validate ([AUTONOMOUS_DEBUGGING.md](./AUTONOMOUS_DEBUGGING.md)) |
 | Buzz permanent multi-role team | **Not** in this slice |
 
 ## 2. Repository structure

@@ -19,6 +19,12 @@ export interface RepairBrief {
   readonly instruction: string;
   readonly attempt: number;
   readonly maxRepairAttempts: number;
+  /** Client recovery narrative: what should be true. */
+  readonly expected?: string;
+  /** Client recovery narrative: what was observed. */
+  readonly actual?: string;
+  /** Reversible repair step description (workspace is disposable). */
+  readonly reversibleStep?: string;
 }
 
 /**
@@ -63,8 +69,8 @@ export class RecoverableFailureDemoAgent implements AgentAdapter {
     return {
       claimedSuccess: true,
       summary:
-        'Installed controlled buggy catalog adapter (inactive kept, internalNote leaked) for failure demo',
-      stdout: `phase=inject-bug\nchanged=${changedFiles.join(',')}\n`,
+        'Deliberate failure: buggy catalog keeps inactive products — storefront no longer shows the expected active set',
+      stdout: `phase=inject-bug\nexpected=active Soft Pink Almond + Rose Gold French\nactual=inactive Archived Sample leaked\nchanged=${changedFiles.join(',')}\n`,
       stderr: '',
       failureClass: 'recoverable',
       failureCode: 'CONTROLLED_BUG_INJECTED',
