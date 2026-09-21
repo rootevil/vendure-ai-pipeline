@@ -1,0 +1,21 @@
+# Long-chain task 03 — proposed third gate task (framework slot)
+#
+# Contractor-proposed third long-chain task for Client confirmation.
+# Same Task → Scenario → Agent → Tools → Validators path. NOT formal gate PASS yet.
+
+id: task-03
+title: Public catalog contract
+goal: >
+  Complete the catalog migration adapter so the public catalog contract
+  passes independent health, API, GraphQL, browser, and state checks
+  with reviewable evidence.
+acceptance:
+  - storefront loads
+  - product is visible
+  - GraphQL products totalItems equals expected migrated count
+  - browser lists migrated product names
+  - catalog state fixture matches expected count
+environment:
+  target: isolated-vendure
+mode: acceptance
+timeoutMs: 300000

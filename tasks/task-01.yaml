@@ -1,0 +1,21 @@
+# Long-chain task 01 — Batch 1 foundation (framework slot)
+#
+# Formal client delivery requires ≥3 long-chain E2E tasks with Batch coverage.
+# This card is a reusable business goal — the Pipeline does not branch on id.
+# See docs/LONG_CHAIN_TASKS.md. This is NOT formal Batch 1 acceptance yet.
+
+id: task-01
+title: Country and channel foundation
+goal: >
+  On an isolated Vendure target, establish the Batch 1 foundation so that
+  country and channel behavior is consistent for customers and products
+  before dependent business flows are exercised.
+acceptance:
+  - storefront loads
+  - product is visible
+  - GraphQL products query succeeds
+  - admin can list channels or countries when available
+environment:
+  target: isolated-vendure
+mode: acceptance
+timeoutMs: 300000

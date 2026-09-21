@@ -167,6 +167,13 @@ export {
   type FailureDemoResult,
   type FailureDemoStep,
 } from './scenarios/public-catalog/failure-demo.js';
+export { discoverLongChainTasks } from './long-chain/discover-tasks.js';
+export {
+  runLongChainTasks,
+  type LongChainRunResult,
+  type LongChainTaskOutcome,
+  type RunLongChainOptions,
+} from './long-chain/run-long-chain.js';
 export {
   RecoverableFailureDemoAgent,
   UnrecoverableFailureDemoAgent,

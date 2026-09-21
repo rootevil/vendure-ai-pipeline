@@ -49,7 +49,7 @@ These are valuable and aligned with the client’s eventual contract, but **out 
 - Load testing (k6/artillery) and authorized red-team (semgrep/trivy/sqlmap) lanes
 - Client Terminal Computer Adapter / minipc allowlisted adapters
 - Owner-controlled Acceptance Manifest freeze + private `vendure-evaluation-input` runs
-- Three long-chain tasks (Batch 1 + Batch 2 + owner-confirmed third)
+- Three long-chain tasks (Batch 1 + Batch 2 + owner-confirmed third) — **framework prepared** as `tasks/task-01.yaml` … `task-03.yaml` with a shared runner ([LONG_CHAIN_TASKS.md](./LONG_CHAIN_TASKS.md)); formal gate PASS still deferred
 - Post-delivery unlimited in-scope tuning until full Batch 1+2 migration reliability
 - Terraform for ephemeral cloud runners (optional; Docker-local is enough for Phase 1)
 - skill-doctor retrospective loop

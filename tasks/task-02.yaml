@@ -1,0 +1,21 @@
+# Long-chain task 02 — Batch 2 commerce flow (framework slot)
+#
+# Same Pipeline as task-01 / task-03. No hardcoded checkout branch in the runner.
+# Scenario compiler maps acceptance language → checks. NOT formal Batch 2 acceptance yet.
+
+id: task-02
+title: Customer browse cart and checkout
+goal: >
+  A customer should be able to browse a product, add it to the cart,
+  and complete the checkout flow on an isolated Vendure target.
+acceptance:
+  - storefront loads
+  - product is visible
+  - product can be added to cart
+  - checkout can be started
+  - order is created
+  - backend contains the order
+environment:
+  target: isolated-vendure
+mode: acceptance
+timeoutMs: 300000

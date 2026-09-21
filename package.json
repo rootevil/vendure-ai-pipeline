@@ -26,6 +26,8 @@
     "demo:success": "node --import tsx scripts/run-client-demo.mjs success",
     "demo:recovery": "node --import tsx scripts/run-client-demo.mjs recovery",
     "demo:block": "node --import tsx scripts/run-client-demo.mjs block",
+    "long-chain": "node --import tsx scripts/run-long-chain.mjs",
+    "long-chain:compile": "node --import tsx scripts/run-long-chain.mjs --compile-only",
     "validate:run": "node packages/validator/bin/validate.mjs",
     "postinstall": "node scripts/ensure-playwright-browsers.mjs",
     "docker:start": "./scripts/start.sh",

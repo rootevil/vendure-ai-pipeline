@@ -135,6 +135,9 @@ vendure-ai-pipeline/
 │   └── retry/                # recovery implementation
 │
 ├── tasks/                    # human + machine task cards
+│   ├── task-01.yaml
+│   ├── task-02.yaml
+│   ├── task-03.yaml
 │   ├── demo-task.yaml
 │   ├── demo-task.json
 │   ├── failure-recovery-task.yaml

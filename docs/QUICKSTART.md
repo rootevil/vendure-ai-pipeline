@@ -101,6 +101,15 @@ npm run demo:block
 `demo:recovery` is Task → Agent → Failure → Diagnosis → Fix → Retest → PASS.  
 `demo:block` is Failure → retries exhausted → circuit breaker → BLOCK → evidence.
 
+### Long-chain task slots (framework)
+
+```bash
+npm run long-chain:compile   # Task → Scenario for task-01…03
+npm run long-chain           # same Pipeline for each card (may BLOCK until live Vendure)
+```
+
+No per-task `if checkout` / `if inventory` branches — see [LONG_CHAIN_TASKS.md](./LONG_CHAIN_TASKS.md).
+
 ### Public catalog (primary Phase 1 demo)
 
 Applies the published reference catalog adapter inside an isolated copy of `evaluation-demo`, starts a local demo server, and runs health/API/GraphQL/browser/state checks.
@@ -203,6 +212,7 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 - [EVIDENCE_PACKAGE.md](./EVIDENCE_PACKAGE.md) — runs/<id>/ layout and final-report.html  
 - [ROLLBACK.md](./ROLLBACK.md) — git checkpoint → preserve / restore  
 - [LOAD_AND_REDTEAM.md](./LOAD_AND_REDTEAM.md) — load/red-team interfaces (not formal acceptance)  
+- [LONG_CHAIN_TASKS.md](./LONG_CHAIN_TASKS.md) — task-01…03 framework (not formal gate PASS)  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
 - [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  

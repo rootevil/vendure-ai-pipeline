@@ -8,7 +8,7 @@ Honest non-claims for operators and reviewers. Security-specific residuals: [SEC
 | --- | --- |
 | Full Vendure Batch 1+2 migration | **Not** implemented; deferred |
 | Live Shop/Admin + Stripe + Mailpit E2E | **Not** implemented |
-| Three long-chain client capability gates | **Not** Phase 1 acceptance |
+| Three long-chain client capability gates | **Framework only** — `tasks/task-0N.yaml` + identical runner; **not** formal gate PASS |
 | Buzz multi-role permanent agents | **Not** implemented |
 | Production deploy / private client repos | **Out of scope** |
 | Unrestricted minipc / SSH | **Out of scope** |
