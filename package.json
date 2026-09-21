@@ -26,6 +26,7 @@
     "demo:success": "node --import tsx scripts/run-client-demo.mjs success",
     "demo:recovery": "node --import tsx scripts/run-client-demo.mjs recovery",
     "demo:block": "node --import tsx scripts/run-client-demo.mjs block",
+    "demo:final": "node --import tsx scripts/run-final-client-demo.mjs",
     "long-chain": "node --import tsx scripts/run-long-chain.mjs",
     "long-chain:compile": "node --import tsx scripts/run-long-chain.mjs --compile-only",
     "validate:run": "node packages/validator/bin/validate.mjs",

@@ -144,6 +144,7 @@ export {
   type PipelineControllerDependencies,
 } from './controller/pipeline-controller.js';
 export { runCli } from './cli/index.js';
+export { runFinalClientDemo, type FinalClientDemoResult } from './cli/final-client-demo.js';
 export {
   runPublicCatalogScenario,
   buildScenarioTask,

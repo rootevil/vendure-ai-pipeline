@@ -26,10 +26,13 @@ import { buildCheckoutJourneyStep, CHECKOUT_SCREENSHOTS } from './journey.js';
 
 export interface BrowserCheckoutScenarioOptions {
   readonly rootDir?: string;
+  readonly artifactsDir?: string;
+  readonly workspaceDir?: string;
   readonly runId?: string;
   readonly keepWorkspace?: boolean;
   readonly useRealBrowser?: boolean;
   readonly productName?: string;
+  readonly logLevel?: 'debug' | 'info' | 'warn' | 'error';
   /** Optional live Postgres URL; demo defaults to controlled json_fixture. */
   readonly postgresConnectionString?: string;
 }
@@ -55,8 +58,8 @@ export async function runBrowserCheckoutScenario(
 ): Promise<BrowserCheckoutScenarioResult> {
   const root = options.rootDir ?? mkdtempSync(join(tmpdir(), 'browser-checkout-'));
   const runId = options.runId ?? `browser-checkout-${Date.now()}`;
-  const workspaceDir = join(root, 'workspace');
-  const artifactsDir = join(root, 'artifacts');
+  const workspaceDir = options.workspaceDir ?? join(root, 'workspace');
+  const artifactsDir = options.artifactsDir ?? join(root, 'artifacts');
   const productName = options.productName ?? 'Soft Pink Almond';
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(artifactsDir, { recursive: true });
@@ -96,7 +99,7 @@ export async function runBrowserCheckoutScenario(
       maxIdenticalRetries: task.retryPolicy.maxIdenticalRetries,
       maxTotalAttempts: task.retryPolicy.maxTotalAttempts,
       allowNetwork: true,
-      logLevel: 'info',
+      logLevel: options.logLevel ?? 'info',
       runId,
       writeAllowlist: [...task.writeAllowlist],
       agentMode: 'mock',
@@ -108,7 +111,7 @@ export async function runBrowserCheckoutScenario(
     const pages = buildFakePages(server.baseUrl, productName);
     const runner = new TaskRunner({
       config,
-      logger: createLogger({ level: 'info' }),
+      logger: createLogger({ level: options.logLevel ?? 'info' }),
       agent: new MockAgentAdapter({ behavior: 'success' }),
       runTests: async () => 0,
       ...(useRealBrowser

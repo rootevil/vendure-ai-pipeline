@@ -101,6 +101,14 @@ npm run demo:block
 `demo:recovery` is Task → Agent → Failure → Diagnosis → Fix → Retest → PASS.  
 `demo:block` is Failure → retries exhausted → circuit breaker → BLOCK → evidence.
 
+### Final client walkthrough (six demos)
+
+```bash
+npm run demo:final
+```
+
+Runs Demo 1–6 in order (business goal → execute → Playwright/GraphQL/DB → evidence → recovery → safe stop). See [FINAL_DEMO.md](./FINAL_DEMO.md).
+
 ### Long-chain task slots (framework)
 
 ```bash

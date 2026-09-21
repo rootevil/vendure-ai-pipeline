@@ -1,0 +1,20 @@
+# Final client demo — business goal (Demo 1)
+#
+# Exact purchase goal language for the client walkthrough.
+# Compiled by the scenario compiler — not free-form agent prose.
+
+id: final-demo-purchase
+title: Customer purchase from storefront
+goal: >
+  A customer should be able to purchase a product from the storefront.
+acceptance:
+  - storefront loads
+  - product is visible
+  - product can be added to cart
+  - checkout can be started
+  - order is created
+  - backend contains the order
+environment:
+  target: isolated-vendure
+mode: acceptance
+timeoutMs: 300000
