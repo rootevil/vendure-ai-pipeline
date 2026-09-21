@@ -1,9 +1,10 @@
 import { mkdirSync } from 'node:fs';
-import { isAbsolute, join, normalize, relative, resolve, sep } from 'node:path';
+import { join, relative, resolve, sep } from 'node:path';
 
 import type { Logger } from '../logging/logger.js';
 import type { PipelineConfig } from '../config/load-config.js';
 import type { RunMode, TaskDefinition } from '../models/types.js';
+import { defaultSafetyKernel, type SafetyKernel } from './safety-kernel.js';
 
 export class SafetyError extends Error {
   override readonly name = 'SafetyError';
@@ -14,7 +15,13 @@ export class SafetyError extends Error {
       | 'NETWORK_DENIED'
       | 'SECRET_PATTERN'
       | 'PRODUCTION_INDICATOR'
-      | 'IRREVERSIBLE_ACTION',
+      | 'IRREVERSIBLE_ACTION'
+      | 'FORBIDDEN_ACTION'
+      | 'COMMAND_DENIED'
+      | 'HOST_FILESYSTEM'
+      | 'RETRY_LIMIT'
+      | 'SSH_DENIED'
+      | 'MINIPC_DENIED',
   ) {
     super(message);
   }
@@ -30,6 +37,7 @@ export interface ExecutionContext {
   readonly allowNetwork: boolean;
   readonly startedAt: string;
   readonly logger: Logger;
+  readonly safetyKernel: SafetyKernel;
   resolveWorkspacePath(candidate: string): string;
   assertWritablePath(candidate: string): string;
 }
@@ -59,10 +67,17 @@ export function createExecutionContext(input: {
   readonly logger: Logger;
   readonly runId?: string;
   readonly now?: Date;
+  readonly safetyKernel?: SafetyKernel;
 }): ExecutionContext {
+  const kernel = input.safetyKernel ?? defaultSafetyKernel;
   const now = input.now ?? new Date();
   const runId = input.runId ?? input.config.runId ?? createRunId(now);
-  const workspaceDir = resolve(input.config.workspaceDir, runId);
+
+  kernel.assertRetryBudgets(input.config.maxIdenticalRetries, input.config.maxTotalAttempts);
+  kernel.assertActionAllowed('write_source');
+  kernel.assertActionAllowed('read_source');
+
+  const workspaceDir = kernel.resolveRunWorkspace(input.config.workspaceDir, runId);
   const artifactDir = resolve(input.config.artifactsDir, runId);
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(artifactDir, { recursive: true });
@@ -75,14 +90,7 @@ export function createExecutionContext(input: {
   const logger = input.logger.child({ runId, taskId: input.task.id, mode: input.config.mode });
 
   const resolveWorkspacePath = (candidate: string): string => {
-    const absolute = isAbsolute(candidate)
-      ? normalize(candidate)
-      : resolve(workspaceDir, candidate);
-    const rel = relative(workspaceDir, absolute);
-    if (rel.startsWith('..') || isAbsolute(rel)) {
-      throw new SafetyError(`Path escapes workspace: ${candidate}`, 'PATH_ESCAPE');
-    }
-    return absolute;
+    return kernel.assertPathInsideWorkspace(workspaceDir, candidate);
   };
 
   const assertWritablePath = (candidate: string): string => {
@@ -122,6 +130,7 @@ export function createExecutionContext(input: {
     allowNetwork: input.config.allowNetwork,
     startedAt: now.toISOString(),
     logger,
+    safetyKernel: kernel,
     resolveWorkspacePath,
     assertWritablePath,
   };
@@ -149,6 +158,12 @@ export function scanTextForSafetyViolations(text: string): SafetyError | null {
         'PRODUCTION_INDICATOR',
       );
     }
+  }
+  if (/\b(ssh\s+\S+|scp\s+\S+|unrestricted\s+minipc|minipc\s+root)\b/i.test(text)) {
+    return new SafetyError(
+      'SSH or unrestricted MiniPC access indicator detected',
+      'SSH_DENIED',
+    );
   }
   return null;
 }

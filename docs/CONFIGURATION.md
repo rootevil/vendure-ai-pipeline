@@ -10,7 +10,7 @@ All pipeline settings are environment variables. Prefer `.env` for host runs and
 | --- | --- | --- |
 | `PIPELINE_MODE` | `acceptance` | `acceptance` \| `baseline` \| `full` |
 | `PIPELINE_ARTIFACTS_DIR` | `./artifacts` | Evidence root |
-| `PIPELINE_WORKSPACE_DIR` | `./workspace` | Disposable workspaces root |
+| `PIPELINE_WORKSPACE_DIR` | `./workspace/runs` | Disposable run workspaces root (`<root>/<runId>/`) |
 | `PIPELINE_MAX_IDENTICAL_RETRIES` | `3` | Max identical failure signatures before circuit open |
 | `PIPELINE_MAX_TOTAL_ATTEMPTS` | `5` | Hard cap on agent attempts |
 | `PIPELINE_ALLOW_NETWORK` | `false` | When false, HTTP/GraphQL/browser checks fail closed |

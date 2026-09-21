@@ -53,6 +53,13 @@ export {
   SafetyError,
   type ExecutionContext,
 } from './safety/execution-context.js';
+export { SafetyKernel, defaultSafetyKernel } from './safety/safety-kernel.js';
+export {
+  DEFAULT_SAFETY_POLICY,
+  type SafetyPolicy,
+  type AllowedAgentAction,
+} from './safety/policy.js';
+export { GuardingProcessRunner } from './safety/command-guard.js';
 export { RetryPolicy, buildFailureSignature, type RetryDecision } from './retry/retry-policy.js';
 export {
   classifyFailure,

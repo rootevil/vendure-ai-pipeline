@@ -21,7 +21,8 @@ Honest non-claims for operators and reviewers. Security-specific residuals: [SEC
 | Public catalog demo | Uses a **scenario agent** that applies the published reference adapter; not a free-form OpenHands solve unless you set `PIPELINE_AGENT_MODE=openhands` |
 | OpenHands | Thin CLI adapter only; **not** a hard OS sandbox |
 | Browser checks | Fake launcher by default; real Chromium needs install + `PIPELINE_USE_REAL_BROWSER=1` |
-| Arbitrary free-form NL → task | **Business YAML cards** (`goal` + `acceptance`) compile to metrics; Markdown is known-card mapping only — not a general LLM PM agent |
+| Task cards | Business YAML (`goal`/`acceptance`) compiles to metrics; Markdown is known-card mapping only — not a free-form LLM PM |
+| Safety kernel | Control-plane allow/deny + `workspace/runs/<id>`; **not** a hard OS sandbox for OpenHands / MiniPC |
 
 ## Isolation
 

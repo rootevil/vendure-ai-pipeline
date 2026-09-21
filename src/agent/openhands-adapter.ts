@@ -2,11 +2,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { ExecutionContext } from '../safety/execution-context.js';
+import { GuardingProcessRunner } from '../safety/command-guard.js';
 import { scrubEnvForAgent } from '../safety/redaction.js';
 import type { AgentAdapter, AgentRunOutcome } from './agent-adapter.js';
 import { diffSnapshots, snapshotWorkspace } from './change-capture.js';
 import type { ProcessRunner } from './process-runner.js';
-import { SpawnProcessRunner } from './process-runner.js';
 import {
   AgentOutputError,
   malformedOutcome,
@@ -36,7 +36,7 @@ export class OpenHandsAgentAdapter implements AgentAdapter {
   constructor(options: OpenHandsAgentAdapterOptions) {
     this.command = options.command ?? 'openhands';
     this.timeoutMs = options.timeoutMs;
-    this.runner = options.runner ?? new SpawnProcessRunner();
+    this.runner = options.runner ?? new GuardingProcessRunner();
     this.extraArgs = options.extraArgs ?? [];
   }
 

@@ -6,6 +6,7 @@ import { minimalTask } from './helpers/minimal-task.js';
 import { ArtifactPresenceValidator } from '../src/validator/validator.js';
 import { createLogger } from '../src/logging/logger.js';
 import type { ExecutionContext } from '../src/safety/execution-context.js';
+import { defaultSafetyKernel } from '../src/safety/safety-kernel.js';
 import type { TaskDefinition } from '../src/models/types.js';
 
 test('parseTaskDefinition accepts a minimal valid task', () => {
@@ -34,6 +35,7 @@ function stubContext(task: TaskDefinition): ExecutionContext {
     allowNetwork: false,
     startedAt: new Date().toISOString(),
     logger: createLogger({ level: 'error' }),
+    safetyKernel: defaultSafetyKernel,
     resolveWorkspacePath: (p) => p,
     assertWritablePath: (p) => p,
   };

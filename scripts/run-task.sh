@@ -29,10 +29,10 @@ if [[ -z "${TASK}" ]]; then
   exit 1
 fi
 
-mkdir -p artifacts workspace
+mkdir -p artifacts workspace/runs
 export PIPELINE_MODE="${MODE}"
 export PIPELINE_ARTIFACTS_DIR="${PIPELINE_ARTIFACTS_DIR:-./artifacts}"
-export PIPELINE_WORKSPACE_DIR="${PIPELINE_WORKSPACE_DIR:-./workspace}"
+export PIPELINE_WORKSPACE_DIR="${PIPELINE_WORKSPACE_DIR:-./workspace/runs}"
 
 # Public catalog markdown card → full scenario (demo server + checks).
 if [[ "${TASK}" == *'/task.md' ]] || [[ "${TASK}" == 'evaluation-demo/task.md' ]] || [[ "${TASK}" == 'task.md' ]]; then
@@ -40,7 +40,7 @@ if [[ "${TASK}" == *'/task.md' ]] || [[ "${TASK}" == 'evaluation-demo/task.md' ]
     import { runPublicCatalogScenario } from './src/scenarios/public-catalog/run-scenario.ts';
     import { mkdirSync } from 'node:fs';
     mkdirSync('artifacts', { recursive: true });
-    mkdirSync('workspace', { recursive: true });
+    mkdirSync('workspace/runs', { recursive: true });
     const r = await runPublicCatalogScenario({
       rootDir: process.cwd(),
       runId: process.env.PIPELINE_RUN_ID || undefined,

@@ -7,7 +7,7 @@ test('loadConfig applies defaults when env is empty', () => {
   const config = loadConfig({});
   assert.equal(config.mode, 'acceptance');
   assert.equal(config.artifactsDir, './artifacts');
-  assert.equal(config.workspaceDir, './workspace');
+  assert.equal(config.workspaceDir, './workspace/runs');
   assert.equal(config.maxIdenticalRetries, 3);
   assert.equal(config.maxTotalAttempts, 5);
   assert.equal(config.allowNetwork, false);
