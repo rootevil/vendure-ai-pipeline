@@ -167,8 +167,10 @@ export {
   looksLikeProductionTarget,
 } from './safety/redaction.js';
 export { loadTaskDefinitionFromPath } from './task/task-card.js';
-export { compileScenarioFromPath } from './compiler/scenario-compiler.js';
+export { compileScenarioFromPath, compileScenarioBundleFromPath } from './compiler/scenario-compiler.js';
 export { compileBusinessTaskCard } from './compiler/compile-business-card.js';
+export { compileTechnicalScenario } from './compiler/compile-technical-scenario.js';
+export { technicalScenarioToTaskDefinition } from './compiler/technical-scenario-to-task.js';
 export {
   loadBusinessTaskCardFromYaml,
   parseBusinessTaskCardYaml,
@@ -178,3 +180,8 @@ export {
   BusinessTaskCardSchema,
   type BusinessTaskCard,
 } from './compiler/business-task-card.js';
+export {
+  TechnicalScenarioSchema,
+  type TechnicalScenario,
+  type TechnicalCheck,
+} from './compiler/technical-scenario.js';

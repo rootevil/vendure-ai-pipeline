@@ -1,0 +1,295 @@
+{
+  "id": "customer-order-demo",
+  "title": "Customer Order Demo",
+  "goal": "A customer should be able to browse a product, add it to the cart and complete the checkout flow.",
+  "acceptance": [
+    "storefront loads",
+    "product is visible",
+    "product can be added to cart",
+    "checkout can be started",
+    "order is created",
+    "backend contains the order"
+  ],
+  "environment": {
+    "target": "isolated-vendure"
+  },
+  "preconditions": [
+    "environment.target=isolated-vendure",
+    "No production credentials or unrestricted minipc/SSH",
+    "Disposable workspace and artifact directories available",
+    "Independent validator available (in-process or artifact CLI)",
+    "Isolated Vendure (or demo stand-in) reachable on allowlisted loopback when network enabled",
+    "Shop/Admin/storefront URLs default to ephemeral http://127.0.0.1:0/… until rebound by a scenario runner"
+  ],
+  "actions": [
+    "Materialize isolated workspace for the target environment",
+    "Allow agent to implement only inside writeAllowlist",
+    "Collect logs, diffs, screenshots, and API responses as evidence",
+    "Hand off to independent validator (agent claimedSuccess is ignored)",
+    "Probe storefront health and open the storefront in a browser check",
+    "List products via Shop API and assert product UI is visible",
+    "Add a product variant to the cart via Shop API GraphQL",
+    "Open checkout route and assert checkout UI is reachable",
+    "Verify an order exists via Shop GraphQL activeOrder",
+    "Verify backend/admin and persisted state contain the order"
+  ],
+  "assertions": [
+    {
+      "id": "evidence-pack",
+      "description": "Required evidence files must be present before PASS",
+      "validationType": "evidence_present",
+      "params": {
+        "files": [
+          "run-manifest.json",
+          "status.json",
+          "stdout.log",
+          "stderr.log",
+          "change-summary.md",
+          "rollback.md",
+          "summary.md",
+          "validation-results.json",
+          "screenshots/",
+          "api-responses/"
+        ]
+      },
+      "evidence": [
+        "run-manifest.json",
+        "status.json",
+        "stdout.log",
+        "stderr.log",
+        "change-summary.md",
+        "rollback.md",
+        "summary.md",
+        "validation-results.json",
+        "screenshots/",
+        "api-responses/"
+      ]
+    },
+    {
+      "id": "storefront-loads-assert",
+      "description": "Business: storefront is available to the customer",
+      "fromAcceptance": "storefront loads",
+      "params": {},
+      "evidence": []
+    },
+    {
+      "id": "product-is-visible-assert",
+      "description": "Business: at least one product is visible to the customer",
+      "fromAcceptance": "product is visible",
+      "params": {},
+      "evidence": []
+    },
+    {
+      "id": "product-can-be-added-to-cart-assert",
+      "description": "Business: customer can add a product to the cart",
+      "fromAcceptance": "product can be added to cart",
+      "params": {},
+      "evidence": []
+    },
+    {
+      "id": "checkout-can-be-started-assert",
+      "description": "Business: checkout can be started",
+      "fromAcceptance": "checkout can be started",
+      "params": {},
+      "evidence": []
+    },
+    {
+      "id": "order-is-created-assert",
+      "description": "Business: an order was created",
+      "fromAcceptance": "order is created",
+      "params": {},
+      "evidence": []
+    },
+    {
+      "id": "backend-contains-the-order-assert",
+      "description": "Business: backend contains the order",
+      "fromAcceptance": "backend contains the order",
+      "params": {},
+      "evidence": []
+    }
+  ],
+  "browserChecks": [
+    {
+      "id": "storefront-loads-browser",
+      "description": "Storefront document loads (body present); screenshot retained",
+      "fromAcceptance": "storefront loads",
+      "validationType": "browser_playwright",
+      "params": {
+        "url": "http://127.0.0.1:0/",
+        "expectSelector": "body",
+        "screenshotName": "storefront-loads.png",
+        "timeoutMs": 15000
+      },
+      "evidence": [
+        "screenshots/storefront-loads.png"
+      ]
+    },
+    {
+      "id": "product-is-visible-browser",
+      "description": "Product listing selector is present on the storefront",
+      "fromAcceptance": "product is visible",
+      "validationType": "browser_playwright",
+      "params": {
+        "url": "http://127.0.0.1:0/",
+        "expectSelector": "[data-testid=\"product\"], .product, #product-list, main",
+        "screenshotName": "product-is-visible.png",
+        "timeoutMs": 15000
+      },
+      "evidence": [
+        "screenshots/product-is-visible.png"
+      ]
+    },
+    {
+      "id": "checkout-can-be-started-browser",
+      "description": "Checkout page exposes a form or checkout landmark",
+      "fromAcceptance": "checkout can be started",
+      "validationType": "browser_playwright",
+      "params": {
+        "url": "http://127.0.0.1:0/checkout",
+        "expectSelector": "form, [data-testid=\"checkout\"], #checkout, main",
+        "screenshotName": "checkout-can-be-started.png",
+        "timeoutMs": 15000
+      },
+      "evidence": [
+        "screenshots/checkout-can-be-started.png"
+      ]
+    }
+  ],
+  "apiChecks": [
+    {
+      "id": "storefront-loads-health",
+      "description": "Storefront / health endpoint returns HTTP 200",
+      "fromAcceptance": "storefront loads",
+      "validationType": "application_health",
+      "params": {
+        "url": "http://127.0.0.1:0/health",
+        "expectStatus": 200,
+        "timeoutMs": 10000
+      },
+      "evidence": [
+        "api-responses/health.json"
+      ]
+    },
+    {
+      "id": "product-is-visible-api",
+      "description": "Shop products HTTP endpoint returns 200",
+      "fromAcceptance": "product is visible",
+      "validationType": "http_response",
+      "params": {
+        "url": "http://127.0.0.1:0/shop-api/products",
+        "method": "GET",
+        "expectStatus": 200,
+        "timeoutMs": 10000
+      },
+      "evidence": [
+        "api-responses/products.json"
+      ]
+    },
+    {
+      "id": "product-can-be-added-to-cart-graphql",
+      "description": "Shop API addItemToOrder returns an Order or typed error payload",
+      "fromAcceptance": "product can be added to cart",
+      "validationType": "graphql_request",
+      "params": {
+        "url": "http://127.0.0.1:0/shop-api",
+        "query": "mutation { addItemToOrder(productVariantId: \"1\", quantity: 1) { ... on Order { id totalQuantity } ... on ErrorResult { errorCode message } } }",
+        "expectDataPath": "addItemToOrder",
+        "expectNoErrors": false,
+        "timeoutMs": 15000
+      },
+      "evidence": [
+        "api-responses/add-item-to-order.json"
+      ]
+    },
+    {
+      "id": "order-is-created-graphql",
+      "description": "Shop API activeOrder is present",
+      "fromAcceptance": "order is created",
+      "validationType": "graphql_request",
+      "params": {
+        "url": "http://127.0.0.1:0/shop-api",
+        "query": "{ activeOrder { id code state totalWithTax } }",
+        "expectNoErrors": true,
+        "expectDataPath": "activeOrder",
+        "timeoutMs": 15000
+      },
+      "evidence": [
+        "api-responses/active-order.json"
+      ]
+    },
+    {
+      "id": "backend-contains-the-order-admin",
+      "description": "Admin API orders query returns at least one item",
+      "fromAcceptance": "backend contains the order",
+      "validationType": "graphql_request",
+      "params": {
+        "url": "http://127.0.0.1:0/admin-api",
+        "query": "{ orders(options: { take: 1 }) { totalItems items { id code } } }",
+        "expectNoErrors": true,
+        "expectDataPath": "orders.totalItems",
+        "timeoutMs": 15000
+      },
+      "evidence": [
+        "api-responses/admin-orders.json"
+      ]
+    }
+  ],
+  "databaseChecks": [
+    {
+      "id": "backend-contains-the-order-db",
+      "description": "Persisted order-state fixture/count shows one order",
+      "fromAcceptance": "backend contains the order",
+      "validationType": "database_state",
+      "params": {
+        "driver": "json_fixture",
+        "fixturePath": "data/order-state.json",
+        "query": "count",
+        "expectRowCount": 1
+      },
+      "evidence": [
+        "data/order-state.json"
+      ]
+    }
+  ],
+  "evidenceRequirements": [
+    "run-manifest.json",
+    "status.json",
+    "stdout.log",
+    "stderr.log",
+    "change-summary.md",
+    "rollback.md",
+    "summary.md",
+    "validation-results.json",
+    "screenshots/",
+    "api-responses/"
+  ],
+  "cleanup": [
+    "Stop ephemeral storefront/demo servers started for this run",
+    "Remove disposable workspace when cleanupWorkspace=true",
+    "Retain artifacts/<runId>/ for review",
+    "Docker stack volumes removed only via scripts/cleanup.sh when used"
+  ],
+  "rollback": [
+    "Discard disposable workspace (see rollback.md in the evidence pack)",
+    "Restore workspace-checkpoint/ if a pre-agent snapshot was taken",
+    "Do not roll back production or shared environments (out of scope)"
+  ],
+  "stopConditions": [
+    "Missing auth/identity required for the task → AUTH_REQUIRED or BLOCK",
+    "Secret-like or production indicators in agent output → safe-stop BLOCK",
+    "Path escape or write outside allowlist → BLOCK",
+    "Network destination outside SSRF allowlist → BLOCK",
+    "Identical recoverable failure budget exhausted → circuit open BLOCK",
+    "Agent claimedSuccess without independent check evidence → never PASS",
+    "Leave environment target isolated-vendure"
+  ],
+  "writeAllowlist": [
+    "storefront",
+    "vendure-store",
+    "src",
+    "app",
+    "evaluation-demo"
+  ],
+  "mode": "acceptance",
+  "timeoutMs": 300000
+}

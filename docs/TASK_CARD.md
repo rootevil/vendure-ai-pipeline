@@ -1,6 +1,8 @@
 # Task cards (business goal → machine metrics)
 
-The client’s core requirement: humans supply a **business goal**, not technical instructions. The scenario compiler expands that card into a machine-checkable `TaskDefinition` (stages, validationSteps, evidence, circuit-break rules).
+The client’s core requirement: humans supply a **business goal**, not technical instructions. The **scenario compiler** expands that card into a client-shaped `technical-task.json`, then into a runnable `TaskDefinition`.
+
+Full compiler docs: [SCENARIO_COMPILER.md](./SCENARIO_COMPILER.md).
 
 ## Business card shape
 
@@ -23,55 +25,21 @@ environment:
   target: isolated-vendure
 ```
 
-| Field | Meaning |
-| --- | --- |
-| `id` | Stable task id |
-| `goal` | End-to-end business outcome in plain language |
-| `acceptance` | Business-visible bullets (not GraphQL/CSS instructions) |
-| `environment.target` | Runtime lane (Phase 1: `isolated-vendure`) |
-
-Optional: `title`, `mode`, `timeoutMs`, `writeAllowlist`, URL overrides under `environment`.
-
-## Compile
+## Compile → technical-task.json
 
 ```bash
 npm run pipeline -- compile --task tasks/customer-order-demo.yaml
+# → preconditions, actions, assertions, browserChecks, apiChecks,
+#   databaseChecks, evidenceRequirements, cleanup, rollback, stopConditions
 ```
 
-Or in code:
+Checked-in sample: `tasks/customer-order-demo.technical-task.json`.
 
-```ts
-import { compileScenarioFromPath } from './src/compiler/scenario-compiler.js';
-const task = compileScenarioFromPath('tasks/customer-order-demo.yaml');
+```bash
+npm run pipeline -- compile --task tasks/customer-order-demo.yaml --format task    # runnable TaskDefinition
+npm run pipeline -- compile --task tasks/customer-order-demo.yaml --format bundle  # both
 ```
 
-## What the compiler produces
+## Honest bounds
 
-For each acceptance bullet, deterministic technical metrics are added, for example:
-
-| Acceptance | Machine checks (examples) |
-| --- | --- |
-| storefront loads | `application_health` + `browser_playwright` |
-| product is visible | Shop HTTP products + browser selector |
-| product can be added to cart | Shop GraphQL `addItemToOrder` |
-| checkout can be started | Browser `/checkout` |
-| order is created | Shop GraphQL `activeOrder` |
-| backend contains the order | Admin GraphQL orders + json_fixture order state |
-
-Plus always: `evidence_present`, stage plan, write allowlist, circuit-break rules. Agent `claimedSuccess` never becomes PASS.
-
-URLs default to `http://127.0.0.1:0/...` (ephemeral / scenario rewrite), matching the public catalog pattern.
-
-## What this does **not** claim
-
-Compiling `customer-order-demo` proves the **task-card → metrics** path. It does **not** by itself prove a live Vendure browse→cart→checkout→order E2E against a full Shop/Admin stack — that remains a later long-chain gate. Running the compiled task against a real isolated Vendure is out of the current vertical-slice demo unless a matching scenario runner exists.
-
-## Related cards
-
-| Card | Kind |
-| --- | --- |
-| `tasks/customer-order-demo.yaml` | Business goal card (compiled) |
-| `tasks/demo-task.yaml` | Companion pointer → catalog E2E JSON |
-| `evaluation-demo/task.md` | Markdown NL card → catalog fixture |
-
-See [ARCHITECTURE.md](./ARCHITECTURE.md), [VALIDATION.md](./VALIDATION.md).
+Compiling proves **goal → technical acceptance metrics**. It does not by itself prove live Vendure browse→cart→checkout until an isolated-Vendure runner executes those checks.

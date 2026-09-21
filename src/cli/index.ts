@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { loadConfig, ConfigError } from '../config/load-config.js';
-import { compileScenarioFromPath } from '../compiler/scenario-compiler.js';
+import { compileScenarioBundleFromPath } from '../compiler/scenario-compiler.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { createLogger } from '../logging/logger.js';
 import { TaskDefinitionError } from '../task/task-definition.js';
@@ -20,11 +20,12 @@ function printUsage(stream: NodeJS.WritableStream): void {
     [
       'Usage:',
       '  vendure-pipeline compile --task <path-to-task.yaml|task.md|task.json>',
+      '  vendure-pipeline compile --task <path> --format technical|task|bundle',
       '  vendure-pipeline run --task <path-to-task.yaml|task.md|task.json>',
       '',
       'Flow:',
-      '  business goal card → scenario compiler → technical task.json metrics',
-      '  → isolated run → agent → validators → evidence → PASS/BLOCK',
+      '  business goal card → scenario compiler → technical-task.json',
+      '  → runnable TaskDefinition → isolated run → agent → validators → PASS/BLOCK',
       '',
       'Environment:',
       '  PIPELINE_MODE, PIPELINE_ARTIFACTS_DIR, PIPELINE_WORKSPACE_DIR,',
@@ -38,18 +39,29 @@ function printUsage(stream: NodeJS.WritableStream): void {
   );
 }
 
-function parseArgs(argv: readonly string[]): { command: string; taskPath: string | null } {
+function parseArgs(argv: readonly string[]): {
+  command: string;
+  taskPath: string | null;
+  format: 'technical' | 'task' | 'bundle';
+} {
   const args = argv.slice(2);
   const command = args[0] ?? 'help';
   let taskPath: string | null = null;
+  let format: 'technical' | 'task' | 'bundle' = 'technical';
   for (let i = 1; i < args.length; i += 1) {
     const current = args[i];
     if (current === '--task') {
       taskPath = args[i + 1] ?? null;
       i += 1;
+    } else if (current === '--format') {
+      const value = args[i + 1] ?? 'technical';
+      if (value === 'technical' || value === 'task' || value === 'bundle') {
+        format = value;
+      }
+      i += 1;
     }
   }
-  return { command, taskPath };
+  return { command, taskPath, format };
 }
 
 export async function runCli(deps: CliDependencies = {}): Promise<number> {
@@ -57,7 +69,7 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
   const argv = deps.argv ?? process.argv;
   const stdout = deps.stdout ?? process.stdout;
   const stderr = deps.stderr ?? process.stderr;
-  const { command, taskPath } = parseArgs(argv);
+  const { command, taskPath, format } = parseArgs(argv);
 
   if (command === 'help' || command === '--help' || command === '-h') {
     printUsage(stdout);
@@ -77,10 +89,27 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
   }
 
   try {
-    const task = compileScenarioFromPath(resolve(taskPath));
+    const bundle = compileScenarioBundleFromPath(resolve(taskPath));
 
     if (command === 'compile') {
-      stdout.write(`${JSON.stringify(task, null, 2)}\n`);
+      if (format === 'technical') {
+        if (!bundle.technical) {
+          stderr.write(
+            JSON.stringify({
+              level: 'error',
+              msg: 'No technical scenario for this input; use a business YAML card (goal/acceptance) or --format task',
+            }) + '\n',
+          );
+          return 1;
+        }
+        stdout.write(`${JSON.stringify(bundle.technical, null, 2)}\n`);
+        return 0;
+      }
+      if (format === 'task') {
+        stdout.write(`${JSON.stringify(bundle.task, null, 2)}\n`);
+        return 0;
+      }
+      stdout.write(`${JSON.stringify(bundle, null, 2)}\n`);
       return 0;
     }
 
@@ -91,7 +120,7 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
       stderr,
     });
     const runner = new TaskRunner({ config, logger });
-    const result = await runner.execute(task);
+    const result = await runner.execute(bundle.task);
     stdout.write(`${JSON.stringify(result, null, 2)}\n`);
     return result.exitCode;
   } catch (error) {

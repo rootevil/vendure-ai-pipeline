@@ -67,7 +67,7 @@ task card → scenario compilation → technical analysis → autonomous develop
 | Layer | Phase 1 status |
 | --- | --- |
 | Natural-language task card | Yes — `evaluation-demo/task.md` + business YAML cards under `tasks/` |
-| Scenario compiler | Yes — business goal → validationSteps (`src/compiler/`); known-card companions for demos |
+| Scenario compiler | Yes — business goal → `technical-task.json` (preconditions/actions/checks/cleanup/rollback/stop) → TaskDefinition |
 | Pipeline controller + safety kernel | Yes — `src/pipeline/`, `src/safety/` |
 | Autonomous agent | Yes — mock + OpenHands CLI adapter + scenario agents; default demo uses scenario/mock |
 | Code / Playwright / GraphQL-API checks | Yes — independent validator check types |
