@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 
+import {
+  isAllowedStackDependencyHost,
+  looksLikeProductionTarget,
+} from '../safety/redaction.js';
 import type { DatabaseExecutor, DatabaseQueryResult } from './check-types.js';
 
 /**
@@ -27,8 +31,21 @@ export const defaultDatabaseExecutor: DatabaseExecutor = async (input) => {
   if (!connectionString) {
     throw new Error('database_state postgres requires connectionString');
   }
-  if (/prod|production/i.test(connectionString)) {
+  if (looksLikeProductionTarget(connectionString)) {
     throw new Error('Refusing database connection string that looks like production');
+  }
+  try {
+    const parsed = new URL(connectionString);
+    const host = parsed.hostname || '';
+    if (host && !isAllowedStackDependencyHost(host)) {
+      throw new Error(
+        `Postgres host ${host} is not in PIPELINE_STACK_HOST_ALLOWLIST (Phase 1)`,
+      );
+    }
+  } catch (error) {
+    if (error instanceof Error && /PIPELINE_STACK_HOST_ALLOWLIST|production/i.test(error.message)) {
+      throw error;
+    }
   }
 
   const dynamicImport = new Function('specifier', 'return import(specifier)') as (

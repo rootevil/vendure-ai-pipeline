@@ -18,14 +18,19 @@ import {
 } from '../src/safety/workspace-checkpoint.js';
 import { runNailPatternsScenario } from '../src/scenarios/nail-patterns/run-scenario.js';
 import { loadTaskDefinitionFromPath } from '../src/task/task-card.js';
+import { redactSecrets, assertSafeHttpDestination } from '../src/safety/redaction.js';
 
-test('validateRunDir ignores agent prose and requires evidence', () => {
+test('validateRunDir ignores agent prose and requires check artifacts for PASS', () => {
   const root = mkdtempSync(join(tmpdir(), 'validate-run-'));
   try {
     writeFileSync(join(root, 'agent-summary.md'), 'Agent says PASS and success\n');
     writeFileSync(
       join(root, 'status.json'),
       JSON.stringify({ status: 'PASS', run_id: 'r1', exit_code: 0 }),
+    );
+    writeFileSync(
+      join(root, 'validation-results.json'),
+      JSON.stringify([{ checkName: 'evidence', status: 'PASS' }]),
     );
     for (const name of [
       'run-manifest.json',
@@ -41,6 +46,31 @@ test('validateRunDir ignores agent prose and requires evidence', () => {
     assert.equal(result.status, 'PASS');
     assert.equal(result.exitCode, 0);
     assert.ok(result.notes.some((n) => /ignored/i.test(n)));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('validateRunDir refuses forgeable PASS without check artifacts', () => {
+  const root = mkdtempSync(join(tmpdir(), 'validate-forge-'));
+  try {
+    writeFileSync(
+      join(root, 'status.json'),
+      JSON.stringify({ status: 'PASS', run_id: 'r3', exit_code: 0 }),
+    );
+    for (const name of [
+      'run-manifest.json',
+      'stdout.log',
+      'stderr.log',
+      'change-summary.md',
+      'rollback.md',
+      'summary.md',
+    ]) {
+      writeFileSync(join(root, name), '{}\n');
+    }
+    const result = validateRunDir({ runDir: root });
+    assert.equal(result.status, 'BLOCK');
+    assert.equal(result.exitCode, 1);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -87,6 +117,24 @@ test('workspace checkpoint restore replaces workspace contents', () => {
   rmSync(root, { recursive: true, force: true });
 });
 
+test('checkpoint restore refuses paths outside allowed roots', () => {
+  const root = mkdtempSync(join(tmpdir(), 'checkpoint-deny-'));
+  const workspace = join(root, 'workspace');
+  const artifacts = join(root, 'artifacts');
+  mkdirSync(workspace, { recursive: true });
+  mkdirSync(artifacts, { recursive: true });
+  writeFileSync(join(workspace, 'keep.txt'), 'x\n');
+  createWorkspaceCheckpoint({ workspaceDir: workspace, artifactDir: artifacts });
+  assert.throws(() =>
+    restoreWorkspaceCheckpoint({
+      workspaceDir: '/etc',
+      artifactDir: artifacts,
+      allowedRoots: [join(root, 'workspace')],
+    }),
+  );
+  rmSync(root, { recursive: true, force: true });
+});
+
 test('loadTaskDefinitionFromPath compiles evaluation-demo/task.md', () => {
   const task = loadTaskDefinitionFromPath('evaluation-demo/task.md');
   assert.equal(task.id, 'vendure-public-catalog-e2e');
@@ -106,4 +154,16 @@ test('nail-patterns scenario PASSes path invariants', async () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('redactSecrets removes credential-like substrings', () => {
+  const redacted = redactSecrets('password=supersecretvalue123 and sk_test_abc123XYZ');
+  assert.match(redacted, /REDACTED/);
+  assert.doesNotMatch(redacted, /supersecretvalue123/);
+});
+
+test('assertSafeHttpDestination allows loopback and blocks metadata', () => {
+  assert.doesNotThrow(() => assertSafeHttpDestination('http://127.0.0.1:9/health'));
+  assert.throws(() => assertSafeHttpDestination('http://169.254.169.254/latest'));
+  assert.throws(() => assertSafeHttpDestination('http://evil.example/'));
 });

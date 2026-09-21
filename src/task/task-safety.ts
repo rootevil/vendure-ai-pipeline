@@ -1,6 +1,7 @@
 import { isAbsolute } from 'node:path';
 
 import type { AllowedTool, TaskDefinition, ValidationStep } from '../models/types.js';
+import { assertSafeScreenshotName } from '../safety/redaction.js';
 import { TaskDefinitionError } from './task-definition.js';
 
 const FORBIDDEN_TOOL_NAMES = new Set([
@@ -46,6 +47,10 @@ export function assertTaskSafe(task: TaskDefinition): void {
 
   for (const path of [...task.writeAllowlist, ...task.sourcePaths]) {
     errors.push(...validateRelativeSafePath(path, 'path'));
+  }
+
+  if (task.writeAllowlist.length === 0) {
+    errors.push('writeAllowlist must contain at least one relative path (fail closed)');
   }
 
   for (const step of task.validationSteps) {
@@ -95,8 +100,17 @@ function validateStep(step: ValidationStep, allowedTools: readonly AllowedTool[]
     case 'application_health':
     case 'http_response':
     case 'graphql_request':
+      errors.push(...validateHttpUrl(step.url, `validationSteps.${step.id}.url`));
+      break;
     case 'browser_playwright':
       errors.push(...validateHttpUrl(step.url, `validationSteps.${step.id}.url`));
+      try {
+        assertSafeScreenshotName(step.screenshotName);
+      } catch (error) {
+        errors.push(
+          `validationSteps.${step.id}.screenshotName: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
       break;
     case 'database_state':
       if (step.driver === 'json_fixture') {
@@ -111,7 +125,7 @@ function validateStep(step: ValidationStep, allowedTools: readonly AllowedTool[]
       if (step.driver === 'postgres') {
         if (!step.connectionString) {
           errors.push(`validationSteps.${step.id} postgres requires connectionString`);
-        } else if (/prod|production/i.test(step.connectionString)) {
+        } else if (/prod|production|live|amazonaws|azure|googleapis/i.test(step.connectionString)) {
           errors.push(`validationSteps.${step.id} refuses production-looking connection strings`);
         }
       }

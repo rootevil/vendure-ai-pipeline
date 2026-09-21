@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: 'Task card path (JSON or evaluation-demo/task.md)'
+        description: 'Allowlisted task card path (evaluation-demo/task.md or fixtures/tasks/*.json)'
         required: true
         default: 'evaluation-demo/task.md'
       mode:
@@ -28,9 +28,12 @@ jobs:
       PIPELINE_MODE: ${{ inputs.mode }}
       PIPELINE_ARTIFACTS_DIR: artifacts
       PIPELINE_WORKSPACE_DIR: workspace
-      PIPELINE_ALLOW_NETWORK: 'true'
+      # Default deny egress; public-catalog scenario enables loopback itself.
+      PIPELINE_ALLOW_NETWORK: 'false'
       PIPELINE_AGENT_MODE: mock
       PIPELINE_LOG_LEVEL: info
+      # Pass task via env (not shell interpolation) to avoid injection.
+      TASK_PATH: ${{ inputs.task }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -56,25 +59,26 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Validate task path allowlist
+        run: |
+          set -euo pipefail
+          TASK="${TASK_PATH}"
+          if [[ "${TASK}" == "evaluation-demo/task.md" ]]; then
+            exit 0
+          fi
+          if [[ "${TASK}" =~ ^fixtures/tasks/[A-Za-z0-9._-]+\.json$ ]]; then
+            exit 0
+          fi
+          echo "Disallowed task path (Phase 1 allowlist only): ${TASK}" >&2
+          exit 1
+
       - name: Run task (public catalog for task.md; JSON otherwise)
         id: run
         run: |
           set -euo pipefail
           mkdir -p artifacts workspace
-          TASK='${{ inputs.task }}'
-          if [[ "${TASK}" == *task.md ]] || [[ "${TASK}" == evaluation-demo/task.md ]]; then
-            npm run scenario:public-catalog
-            # Copy latest scenario evidence into artifacts/ for upload
-            LATEST="$(ls -1dt /tmp/vendure-catalog-scenario-* 2>/dev/null | head -1 || true)"
-            if [[ -z "${LATEST}" ]]; then
-              # scenario writes under OS temp; also check local artifacts from env override
-              echo "Looking for scenario evidence under artifacts/"
-            fi
-            # Prefer copying from PIPELINE-style local runs if present
-            if [[ -d artifacts ]] && [[ -n "$(ls -A artifacts 2>/dev/null || true)" ]]; then
-              echo "artifacts already populated"
-            fi
-            # Re-run with fixed root so evidence lands in ./artifacts
+          TASK="${TASK_PATH}"
+          if [[ "${TASK}" == "evaluation-demo/task.md" ]]; then
             node --import tsx -e "
               import { runPublicCatalogScenario } from './src/scenarios/public-catalog/run-scenario.ts';
               import { mkdirSync } from 'node:fs';
@@ -82,7 +86,7 @@ jobs:
               mkdirSync('workspace', { recursive: true });
               const r = await runPublicCatalogScenario({
                 rootDir: process.cwd(),
-                runId: 'gha-${Date.now()}',
+                runId: 'gha-' + Date.now(),
                 keepWorkspace: false,
                 useRealBrowser: process.env.PIPELINE_USE_REAL_BROWSER === '1',
               });

@@ -1,11 +1,16 @@
 import { spawnSync } from 'node:child_process';
 
 import type { ValidationCheckResult, ValidationStep } from '../../models/types.js';
+import {
+  isAllowedStackDependencyHost,
+  looksLikeProductionTarget,
+} from '../../safety/redaction.js';
 import { createCheckResult } from '../check-result.js';
 import type { CheckRunnerContext } from '../check-types.js';
 
 /**
  * Ping Redis via redis-cli (available in the Docker runtime image).
+ * Host must be on PIPELINE_STACK_HOST_ALLOWLIST (default: redis, postgres, loopback).
  */
 export async function runRedisPingCheck(
   step: Extract<ValidationStep, { type: 'redis_ping' }>,
@@ -13,12 +18,37 @@ export async function runRedisPingCheck(
 ): Promise<ValidationCheckResult> {
   const evidenceFile = `${step.id}.json`;
   const url = step.url ?? process.env.REDIS_URL ?? 'redis://127.0.0.1:6379/0';
-  const expected = `redis-cli PONG for ${url}`;
+  const expected = `redis-cli PONG for stack-allowlisted host`;
 
   try {
     const parsed = new URL(url);
     const host = parsed.hostname || '127.0.0.1';
     const port = parsed.port || '6379';
+    if (!isAllowedStackDependencyHost(host)) {
+      return createCheckResult({
+        checkName: step.id,
+        status: 'FAIL',
+        expected,
+        actual: `Host ${host} is not in PIPELINE_STACK_HOST_ALLOWLIST`,
+        output: JSON.stringify({ url, host }, null, 2),
+        evidenceDir: ctx.evidenceDir,
+        evidenceFileName: evidenceFile,
+        ...(ctx.now !== undefined ? { now: ctx.now } : {}),
+      });
+    }
+    if (looksLikeProductionTarget(url)) {
+      return createCheckResult({
+        checkName: step.id,
+        status: 'FAIL',
+        expected,
+        actual: 'Refusing production-looking Redis URL',
+        output: 'blocked',
+        evidenceDir: ctx.evidenceDir,
+        evidenceFileName: evidenceFile,
+        ...(ctx.now !== undefined ? { now: ctx.now } : {}),
+      });
+    }
+
     const result = spawnSync('redis-cli', ['-h', host, '-p', port, 'ping'], {
       encoding: 'utf8',
       timeout: step.timeoutMs,
@@ -29,8 +59,10 @@ export async function runRedisPingCheck(
       checkName: step.id,
       status: passed ? 'PASS' : 'FAIL',
       expected,
-      actual: passed ? 'PONG' : `status=${String(result.status)} stdout=${stdout} stderr=${(result.stderr ?? '').trim()}`,
-      output: JSON.stringify({ url, host, port, stdout, stderr: result.stderr ?? '' }, null, 2),
+      actual: passed
+        ? 'PONG'
+        : `status=${String(result.status)} stdout=${stdout} stderr=${(result.stderr ?? '').trim()}`,
+      output: JSON.stringify({ host, port, stdout, stderr: result.stderr ?? '' }, null, 2),
       evidenceDir: ctx.evidenceDir,
       evidenceFileName: evidenceFile,
       ...(ctx.now !== undefined ? { now: ctx.now } : {}),
@@ -59,10 +91,10 @@ export async function runPostgresReadyCheck(
   const evidenceFile = `${step.id}.json`;
   const connectionString =
     step.connectionString ?? process.env.DATABASE_URL ?? process.env.PGHOST ?? '';
-  const expected = 'pg_isready reports accepting connections';
+  const expected = 'pg_isready reports accepting connections (stack-allowlisted host)';
 
   try {
-    if (/prod|production/i.test(connectionString)) {
+    if (looksLikeProductionTarget(connectionString)) {
       return createCheckResult({
         checkName: step.id,
         status: 'FAIL',
@@ -76,6 +108,21 @@ export async function runPostgresReadyCheck(
     }
 
     const args = buildPgIsReadyArgs(connectionString);
+    const hostIdx = args.indexOf('-h');
+    const host = hostIdx >= 0 ? (args[hostIdx + 1] ?? '127.0.0.1') : '127.0.0.1';
+    if (!isAllowedStackDependencyHost(host)) {
+      return createCheckResult({
+        checkName: step.id,
+        status: 'FAIL',
+        expected,
+        actual: `Host ${host} is not in PIPELINE_STACK_HOST_ALLOWLIST`,
+        output: JSON.stringify({ args }, null, 2),
+        evidenceDir: ctx.evidenceDir,
+        evidenceFileName: evidenceFile,
+        ...(ctx.now !== undefined ? { now: ctx.now } : {}),
+      });
+    }
+
     const result = spawnSync('pg_isready', args, {
       encoding: 'utf8',
       timeout: step.timeoutMs,
@@ -87,7 +134,9 @@ export async function runPostgresReadyCheck(
       checkName: step.id,
       status: passed ? 'PASS' : 'FAIL',
       expected,
-      actual: passed ? stdout || 'accepting connections' : `status=${String(result.status)} ${stdout} ${(result.stderr ?? '').trim()}`,
+      actual: passed
+        ? stdout || 'accepting connections'
+        : `status=${String(result.status)} ${stdout} ${(result.stderr ?? '').trim()}`,
       output: JSON.stringify({ args, stdout, stderr: result.stderr ?? '' }, null, 2),
       evidenceDir: ctx.evidenceDir,
       evidenceFileName: evidenceFile,
@@ -125,11 +174,9 @@ function buildPgIsReadyArgs(connectionString: string): string[] {
     }
   }
 
-  const args: string[] = [];
   const host = process.env.PGHOST ?? '127.0.0.1';
   const port = process.env.PGPORT ?? '5432';
   const user = process.env.PGUSER ?? 'pipeline';
   const database = process.env.PGDATABASE ?? 'pipeline';
-  args.push('-h', host, '-p', port, '-U', user, '-d', database);
-  return args;
+  return ['-h', host, '-p', port, '-U', user, '-d', database];
 }

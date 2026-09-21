@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 
+import { truncateAndRedactLog } from '../safety/redaction.js';
+
 export interface ProcessRunRequest {
   readonly command: string;
   readonly args: readonly string[];
@@ -21,6 +23,8 @@ export interface ProcessRunner {
   run(request: ProcessRunRequest): Promise<ProcessRunResult>;
 }
 
+const HARD_CAPTURE_LIMIT = 4 * 1024 * 1024;
+
 export class SpawnProcessRunner implements ProcessRunner {
   async run(request: ProcessRunRequest): Promise<ProcessRunResult> {
     const started = Date.now();
@@ -29,6 +33,7 @@ export class SpawnProcessRunner implements ProcessRunner {
       let stderr = '';
       let timedOut = false;
       let settled = false;
+      let truncated = false;
 
       const child = spawn(request.command, [...request.args], {
         cwd: request.cwd,
@@ -41,11 +46,28 @@ export class SpawnProcessRunner implements ProcessRunner {
         child.kill('SIGKILL');
       }, request.timeoutMs);
 
+      const append = (target: 'stdout' | 'stderr', chunk: Buffer | string) => {
+        const text = chunk.toString();
+        if (target === 'stdout') {
+          stdout += text;
+          if (Buffer.byteLength(stdout, 'utf8') > HARD_CAPTURE_LIMIT) {
+            truncated = true;
+            child.kill('SIGKILL');
+          }
+        } else {
+          stderr += text;
+          if (Buffer.byteLength(stderr, 'utf8') > HARD_CAPTURE_LIMIT) {
+            truncated = true;
+            child.kill('SIGKILL');
+          }
+        }
+      };
+
       child.stdout?.on('data', (chunk: Buffer | string) => {
-        stdout += chunk.toString();
+        append('stdout', chunk);
       });
       child.stderr?.on('data', (chunk: Buffer | string) => {
-        stderr += chunk.toString();
+        append('stderr', chunk);
       });
 
       const finish = (exitCode: number | null, signal: NodeJS.Signals | null) => {
@@ -54,12 +76,15 @@ export class SpawnProcessRunner implements ProcessRunner {
         }
         settled = true;
         clearTimeout(timer);
+        if (truncated) {
+          stderr += '\n[process output exceeded 4MB capture limit; killed]\n';
+        }
         resolve({
           exitCode,
           signal,
-          stdout,
-          stderr,
-          timedOut,
+          stdout: truncateAndRedactLog(stdout),
+          stderr: truncateAndRedactLog(stderr),
+          timedOut: timedOut || truncated,
           durationMs: Date.now() - started,
         });
       };

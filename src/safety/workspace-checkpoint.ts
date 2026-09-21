@@ -8,7 +8,8 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 const CHECKPOINT_DIRNAME = 'workspace-checkpoint';
 const META_FILE = 'checkpoint-meta.json';
@@ -79,19 +80,24 @@ export function createWorkspaceCheckpoint(input: {
 export function restoreWorkspaceCheckpoint(input: {
   readonly workspaceDir: string;
   readonly artifactDir: string;
+  /** Optional roots the workspace must remain under (fail closed). */
+  readonly allowedRoots?: readonly string[];
 }): CheckpointMeta {
   const checkpointDir = join(input.artifactDir, CHECKPOINT_DIRNAME);
   if (!existsSync(checkpointDir) || !statSync(checkpointDir).isDirectory()) {
     throw new Error(`Checkpoint missing under ${checkpointDir}`);
   }
 
-  mkdirSync(input.workspaceDir, { recursive: true });
-  for (const name of readdirSync(input.workspaceDir)) {
-    rmSync(join(input.workspaceDir, name), { recursive: true, force: true });
+  const workspaceDir = resolve(input.workspaceDir);
+  assertWorkspaceUnderAllowedRoots(workspaceDir, input.allowedRoots);
+
+  mkdirSync(workspaceDir, { recursive: true });
+  for (const name of readdirSync(workspaceDir)) {
+    rmSync(join(workspaceDir, name), { recursive: true, force: true });
   }
   let entryCount = 0;
   for (const name of readdirSync(checkpointDir)) {
-    cpSync(join(checkpointDir, name), join(input.workspaceDir, name), {
+    cpSync(join(checkpointDir, name), join(workspaceDir, name), {
       recursive: true,
       force: true,
     });
@@ -104,7 +110,30 @@ export function restoreWorkspaceCheckpoint(input: {
   }
   return {
     createdAt: new Date().toISOString(),
-    sourceWorkspaceDir: input.workspaceDir,
+    sourceWorkspaceDir: workspaceDir,
     entryCount,
   };
+}
+
+export function assertWorkspaceUnderAllowedRoots(
+  workspaceDir: string,
+  allowedRoots?: readonly string[],
+): void {
+  const roots =
+    allowedRoots && allowedRoots.length > 0
+      ? allowedRoots.map((root) => resolve(root))
+      : [
+          resolve(process.env.PIPELINE_WORKSPACE_DIR ?? './workspace'),
+          resolve(tmpdir()),
+          resolve(process.cwd(), 'workspace'),
+        ];
+  const underRoot = roots.some((root) => {
+    const rel = relative(root, workspaceDir);
+    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+  });
+  if (!underRoot) {
+    throw new Error(
+      `Refusing checkpoint restore outside allowed workspace roots: ${workspaceDir}`,
+    );
+  }
 }

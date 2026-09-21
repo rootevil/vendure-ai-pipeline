@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { ExecutionContext } from '../safety/execution-context.js';
+import { redactSecrets, truncateAndRedactLog } from '../safety/redaction.js';
 import type { AttemptRecord, RunManifest, RunStatus } from '../models/types.js';
 
 export interface EvidenceBundleInput {
@@ -37,6 +38,12 @@ export class FileEvidenceCollector implements EvidenceCollector {
     mkdirSync(join(dir, 'api-responses'), { recursive: true });
     mkdirSync(join(dir, 'validation'), { recursive: true });
 
+    const stdout = truncateAndRedactLog(input.stdout);
+    const stderr = truncateAndRedactLog(input.stderr);
+    const diff = redactSecrets(input.diff);
+    const secretsUsed =
+      input.secretsUsed || stdout !== input.stdout || stderr !== input.stderr || diff !== input.diff;
+
     const manifest: RunManifest = {
       run_id: input.context.runId,
       mode: input.context.mode,
@@ -44,7 +51,7 @@ export class FileEvidenceCollector implements EvidenceCollector {
       started_at: input.context.startedAt,
       finished_at: input.finishedAt,
       network_used: input.networkUsed,
-      secrets_used: input.secretsUsed,
+      secrets_used: secretsUsed,
       attempts: input.attempts.length,
       max_identical_retries: input.maxIdenticalRetries,
       status: input.status,
@@ -59,14 +66,14 @@ export class FileEvidenceCollector implements EvidenceCollector {
       '## Attempts',
       ...input.attempts.map(
         (attempt) =>
-          `- #${attempt.attempt} ${attempt.failureKind}/${attempt.failureClass} claimedSuccess=${String(attempt.agentClaimedSuccess)} — ${attempt.message}`,
+          `- #${attempt.attempt} ${attempt.failureKind}/${attempt.failureClass} claimedSuccess=${String(attempt.agentClaimedSuccess)} — ${redactSecrets(attempt.message)}`,
       ),
       '',
       '## stdout',
-      input.stdout || '(empty)',
+      stdout || '(empty)',
       '',
       '## stderr',
-      input.stderr || '(empty)',
+      stderr || '(empty)',
       '',
     ].join('\n');
 
@@ -77,19 +84,17 @@ export class FileEvidenceCollector implements EvidenceCollector {
         `${JSON.stringify({ status: input.status, run_id: input.context.runId }, null, 2)}\n`,
       ],
       ['task.json', `${JSON.stringify(input.context.task, null, 2)}\n`],
-      ['stdout.log', input.stdout],
-      ['stderr.log', input.stderr],
+      ['stdout.log', stdout],
+      ['stderr.log', stderr],
       ['execution.log', ensureTrailingNewline(executionLog)],
-      ['diff.patch', input.diff],
+      ['diff.patch', diff],
       [
         'git.diff',
-        ensureTrailingNewline(
-          input.diff.length > 0 ? input.diff : 'No git diff captured for this run.',
-        ),
+        ensureTrailingNewline(diff.length > 0 ? diff : 'No git diff captured for this run.'),
       ],
-      ['change-summary.md', ensureTrailingNewline(input.changeSummary)],
+      ['change-summary.md', ensureTrailingNewline(redactSecrets(input.changeSummary))],
       ['rollback.md', ensureTrailingNewline(input.rollback)],
-      ['summary.md', ensureTrailingNewline(input.summary)],
+      ['summary.md', ensureTrailingNewline(redactSecrets(input.summary))],
       ['attempts.json', `${JSON.stringify(input.attempts, null, 2)}\n`],
     ];
 

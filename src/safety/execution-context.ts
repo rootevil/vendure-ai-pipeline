@@ -86,9 +86,20 @@ export function createExecutionContext(input: {
   };
 
   const assertWritablePath = (candidate: string): string => {
+    if (
+      candidate.includes('..') ||
+      candidate.includes('\0') ||
+      candidate.includes('\\') ||
+      candidate.startsWith('~/')
+    ) {
+      throw new SafetyError(`Write path is unsafe: ${candidate}`, 'PATH_ESCAPE');
+    }
     const absolute = resolveWorkspacePath(candidate);
     if (writeAllowlist.length === 0) {
-      return absolute;
+      throw new SafetyError(
+        'Write allowlist is empty; refusing all writes (fail closed)',
+        'PATH_ESCAPE',
+      );
     }
     const rel = relative(workspaceDir, absolute).split(sep).join('/');
     const allowed = writeAllowlist.some((entry) => {

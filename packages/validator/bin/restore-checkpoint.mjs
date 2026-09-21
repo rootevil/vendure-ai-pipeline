@@ -2,6 +2,7 @@
 /**
  * Restore a workspace from artifactDir/workspace-checkpoint/.
  * Usage: node packages/validator/bin/restore-checkpoint.mjs --run-dir artifacts/<run_id> [--workspace <dir>]
+ * Workspace must remain under PIPELINE_WORKSPACE_DIR, ./workspace, or OS temp.
  */
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -56,9 +57,16 @@ if (!workspaceDir) {
   process.exit(1);
 }
 
-const mod = await loadCheckpoint();
-const meta = mod.restoreWorkspaceCheckpoint({
-  workspaceDir,
-  artifactDir: absoluteRunDir,
-});
-process.stdout.write(`${JSON.stringify({ ok: true, meta }, null, 2)}\n`);
+try {
+  const mod = await loadCheckpoint();
+  const meta = mod.restoreWorkspaceCheckpoint({
+    workspaceDir,
+    artifactDir: absoluteRunDir,
+  });
+  process.stdout.write(`${JSON.stringify({ ok: true, meta }, null, 2)}\n`);
+} catch (error) {
+  process.stderr.write(
+    `${JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) })}\n`,
+  );
+  process.exit(1);
+}

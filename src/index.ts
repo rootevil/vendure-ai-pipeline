@@ -157,4 +157,13 @@ export {
   restoreWorkspaceCheckpoint,
   type CheckpointMeta,
 } from './safety/workspace-checkpoint.js';
+export {
+  redactSecrets,
+  truncateAndRedactLog,
+  scrubEnvForAgent,
+  assertSafeHttpDestination,
+  isAllowedStackDependencyHost,
+  assertSafeScreenshotName,
+  looksLikeProductionTarget,
+} from './safety/redaction.js';
 export { loadTaskDefinitionFromPath } from './task/task-card.js';

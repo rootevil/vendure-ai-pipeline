@@ -1,3 +1,5 @@
+import { assertSafeHttpDestination } from '../safety/redaction.js';
+
 export async function defaultHttpFetcher(input: {
   readonly url: string;
   readonly method: string;
@@ -5,6 +7,7 @@ export async function defaultHttpFetcher(input: {
   readonly body?: string;
   readonly timeoutMs: number;
 }): Promise<{ status: number; bodyText: string }> {
+  assertHttpUrl(input.url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), input.timeoutMs);
   try {
@@ -25,16 +28,5 @@ export async function defaultHttpFetcher(input: {
 }
 
 export function assertHttpUrl(url: string): void {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error(`Invalid URL: ${url}`);
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`Only http/https URLs are allowed: ${url}`);
-  }
-  if (parsed.username || parsed.password) {
-    throw new Error(`URL credentials are not allowed: ${url}`);
-  }
+  assertSafeHttpDestination(url);
 }

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { ExecutionContext } from '../safety/execution-context.js';
+import { scrubEnvForAgent } from '../safety/redaction.js';
 import type { AgentAdapter, AgentRunOutcome } from './agent-adapter.js';
 import { diffSnapshots, snapshotWorkspace } from './change-capture.js';
 import type { ProcessRunner } from './process-runner.js';
@@ -57,8 +58,9 @@ export class OpenHandsAgentAdapter implements AgentAdapter {
       args: ['--headless', '--json', '-f', briefPath, ...this.extraArgs],
       cwd: context.workspaceDir,
       env: {
-        ...process.env,
-        // Keep credentials out of adapter logs; runtime may inject LLM_* separately.
+        ...scrubEnvForAgent(process.env),
+        // Keep credentials out of adapter logs; runtime may inject LLM_* separately
+        // only via explicitly non-secret keys (scrubEnvForAgent drops *TOKEN*/PASSWORD*).
         PIPELINE_AGENT_WORKSPACE: context.workspaceDir,
         PIPELINE_TASK_ID: context.task.id,
       },
@@ -124,16 +126,33 @@ export class OpenHandsAgentAdapter implements AgentAdapter {
       throw error;
     }
 
-    const changedFiles = reportedFiles ?? changes.changedFiles;
+    // Trust filesystem snapshot for allowlist enforcement; agent-reported paths are advisory only.
+    const controlFiles = new Set(['task-brief.md', 'agent-result.json']);
+    const changedFiles = changes.changedFiles.filter((file) => !controlFiles.has(file));
     for (const file of changedFiles) {
-      // Enforce allowlist; throws SafetyError which controller handles.
-      if (!file.includes('..')) {
-        try {
-          context.assertWritablePath(file);
-        } catch {
+      try {
+        context.assertWritablePath(file);
+      } catch {
+        return {
+          claimedSuccess: false,
+          summary: `OpenHands changed a path outside the write allowlist: ${file}`,
+          stdout: processResult.stdout,
+          stderr: processResult.stderr,
+          failureClass: 'non_recoverable',
+          failureCode: 'PATH_ESCAPE',
+          changedFiles: [],
+          diff: changes.diff,
+        };
+      }
+    }
+
+    // If the agent reported paths that were not snapshotted (possible outside-workspace write), fail closed.
+    if (reportedFiles) {
+      for (const file of reportedFiles) {
+        if (file.includes('..') || file.startsWith('/') || /^[A-Za-z]:[\\/]/.test(file)) {
           return {
             claimedSuccess: false,
-            summary: `OpenHands changed a path outside the write allowlist: ${file}`,
+            summary: `OpenHands reported unsafe changed path: ${file}`,
             stdout: processResult.stdout,
             stderr: processResult.stderr,
             failureClass: 'non_recoverable',

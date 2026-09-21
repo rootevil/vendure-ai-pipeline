@@ -6,7 +6,6 @@ import type { AttemptRecord, RunResult, TaskDefinition } from '../models/types.j
 import { classifyFailure } from '../retry/failure-classifier.js';
 import { buildFailureSignature, RetryPolicy } from '../retry/retry-policy.js';
 import {
-  assertNetworkAllowed,
   createExecutionContext,
   scanTextForSafetyViolations,
   SafetyError,
@@ -61,19 +60,8 @@ export class PipelineController {
       now: nowFn,
     });
 
-    try {
-      assertNetworkAllowed(context.allowNetwork, false);
-    } catch (error) {
-      return this.finalizeBlocked({
-        context,
-        attempts,
-        lastOutcome,
-        status: 'BLOCK',
-        notes: [error instanceof Error ? error.message : String(error)],
-        finishedAt: nowFn().toISOString(),
-        exitCode: 1,
-      });
-    }
+    // Agent phase never receives an egress grant; validator checks enforce
+    // PIPELINE_ALLOW_NETWORK and destination allowlists independently.
 
     for (;;) {
       const attemptStarted = nowFn();

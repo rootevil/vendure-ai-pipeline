@@ -75,17 +75,37 @@ export function validateRunDir(input: ValidateRunDirInput): ValidateRunDirResult
   }
 
   const checkAudit = auditValidationChecks(runDir);
-  if (checkAudit.failed.length > 0 && status === 'PASS') {
-    notes.push(
-      `status.json claims PASS but validation checks failed: ${checkAudit.failed.join(', ')}`,
-    );
-    return { status: 'BLOCK', exitCode: 1, notes, runId };
-  }
   notes.push(...checkAudit.notes);
 
   if (!status) {
     notes.push('status.json missing usable status field');
     return { status: 'BLOCK', exitCode: 1, notes, runId };
+  }
+
+  // Refuse forgeable PASS: require independent check artifacts with zero failures.
+  if (status === 'PASS') {
+    if (!checkAudit.audited) {
+      notes.push(
+        'status.json claims PASS but validation-results.json/validation.json is missing; refusing forgeable PASS',
+      );
+      return { status: 'BLOCK', exitCode: 1, notes, runId };
+    }
+    if (checkAudit.checkCount < 1) {
+      notes.push('status.json claims PASS but no validation checks were recorded');
+      return { status: 'BLOCK', exitCode: 1, notes, runId };
+    }
+    if (checkAudit.failed.length > 0) {
+      notes.push(
+        `status.json claims PASS but validation checks failed: ${checkAudit.failed.join(', ')}`,
+      );
+      return { status: 'BLOCK', exitCode: 1, notes, runId };
+    }
+  }
+
+  if (status === 'BASELINE_BLOCKED_EXPECTED') {
+    // Baseline expected block still requires evidence files; check audit optional.
+    notes.push('Artifact validator accepted status=BASELINE_BLOCKED_EXPECTED');
+    return { status, exitCode: 0, notes, runId };
   }
 
   if (TERMINAL_PASS.has(status)) {
@@ -144,7 +164,12 @@ function listPresentEvidence(runDir: string): Set<string> {
   return present;
 }
 
-function auditValidationChecks(runDir: string): { failed: string[]; notes: string[] } {
+function auditValidationChecks(runDir: string): {
+  failed: string[];
+  notes: string[];
+  audited: boolean;
+  checkCount: number;
+} {
   const notes: string[] = [];
   const failed: string[] = [];
   const candidates = ['validation-results.json', 'validation.json'];
@@ -158,7 +183,7 @@ function auditValidationChecks(runDir: string): { failed: string[]; notes: strin
       const checks = Array.isArray(raw)
         ? raw
         : raw && typeof raw === 'object' && Array.isArray((raw as { checks?: unknown }).checks)
-          ? ((raw as { checks: unknown[] }).checks)
+          ? (raw as { checks: unknown[] }).checks
           : null;
       if (!checks) {
         continue;
@@ -173,14 +198,15 @@ function auditValidationChecks(runDir: string): { failed: string[]; notes: strin
         }
       }
       notes.push(`Audited ${checks.length} checks from ${name}`);
-      break;
+      return { failed, notes, audited: true, checkCount: checks.length };
     } catch (error) {
       notes.push(
         `Unable to audit ${name}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
-  return { failed, notes };
+  notes.push('No validation-results.json or validation.json found for audit');
+  return { failed, notes, audited: false, checkCount: 0 };
 }
 
 function readOptional(path: string): string | null {
