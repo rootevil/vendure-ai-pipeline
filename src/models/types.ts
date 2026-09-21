@@ -103,8 +103,18 @@ export const ValidationStepSchema = z.discriminatedUnion('type', [
     fixturePath: z.string().min(1).optional(),
     /** Connection string or env var reference for postgres driver. */
     connectionString: z.string().min(1).optional(),
-    /** JSON path (dot notation) or SQL SELECT depending on driver. */
-    query: z.string().min(1),
+    /**
+     * JSON path (json_fixture) or raw SQL (discouraged).
+     * Prefer controlledQueryId for postgres — agents never supply free SQL.
+     */
+    query: z.string().min(1).optional(),
+    /**
+     * Allowlisted validator query id (e.g. order_by_code → SELECT id, state FROM "order" WHERE code = $1).
+     * Required for postgres driver.
+     */
+    controlledQueryId: z.string().min(1).optional(),
+    /** Bound parameters for controlled / parameterized SQL ($1, $2, …). */
+    params: z.array(z.unknown()).optional(),
     expectEquals: z.unknown().optional(),
     expectRowCount: z.number().int().nonnegative().optional(),
     expectContains: z.unknown().optional(),

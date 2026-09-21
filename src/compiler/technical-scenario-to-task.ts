@@ -157,18 +157,22 @@ function technicalCheckToValidationStep(check: TechnicalCheck): ValidationStep |
           { type: 'browser_journey' }
         >['actions']) ?? [],
       };
-    case 'database_state':
-      return {
+    case 'database_state': {
+      const step: Extract<import('../models/types.js').ValidationStep, { type: 'database_state' }> = {
         id: check.id,
         type: 'database_state',
         driver: (p.driver as 'json_fixture' | 'postgres') ?? 'json_fixture',
-        fixturePath: p.fixturePath ? String(p.fixturePath) : undefined,
-        connectionString: p.connectionString ? String(p.connectionString) : undefined,
-        query: String(p.query ?? 'count'),
-        expectEquals: p.expectEquals,
-        expectRowCount: p.expectRowCount !== undefined ? Number(p.expectRowCount) : undefined,
-        expectContains: p.expectContains,
+        params: Array.isArray(p.params) ? (p.params as unknown[]) : [],
+        ...(p.fixturePath ? { fixturePath: String(p.fixturePath) } : {}),
+        ...(p.connectionString ? { connectionString: String(p.connectionString) } : {}),
+        ...(p.query ? { query: String(p.query) } : {}),
+        ...(p.controlledQueryId ? { controlledQueryId: String(p.controlledQueryId) } : {}),
+        ...(p.expectEquals !== undefined ? { expectEquals: p.expectEquals } : {}),
+        ...(p.expectRowCount !== undefined ? { expectRowCount: Number(p.expectRowCount) } : {}),
+        ...(p.expectContains !== undefined ? { expectContains: p.expectContains } : {}),
       };
+      return step;
+    }
     case 'workspace_file_contains':
       return {
         id: check.id,

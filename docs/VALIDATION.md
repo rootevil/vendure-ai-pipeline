@@ -43,7 +43,7 @@ Client-facing artifact: `artifacts/<runId>/validator-verdict.json` — built onl
 
 If any critical assertion fails, overall `status` is `BLOCK` regardless of the agent self-report.
 
-**Dual evidence:** browser screenshots alone are not enough. After Playwright, the checkout demo also runs independent GraphQL/API product and order queries — see [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md).
+**Dual evidence:** browser screenshots alone are not enough. After Playwright, the checkout demo also runs independent GraphQL/API product and order queries — see [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md). Controlled DB queries (no free-form agent SQL) are documented in [DATABASE_VALIDATION.md](./DATABASE_VALIDATION.md).
 
 ## Status vocabulary
 
@@ -68,7 +68,7 @@ Evaluation-demo verifier (`evaluation-demo/scripts/verify.mjs`) uses the same st
 | `graphql_request` | GraphQL errors / data path |
 | `browser_playwright` | Title/selector/text (+ screenshot name) |
 | `browser_journey` | Multi-step Playwright flow; numbered screenshots + `playwright-results.json` |
-| `database_state` | `json_fixture` (default) or optional `postgres` driver |
+| `database_state` | `json_fixture` or `postgres` via **controlledQueryId** only (read-only SELECT; expected vs actual) |
 | `path_invariant` | Nested fixture tree not flattened |
 | `redis_ping` / `postgres_ready` | Stack dependency probes (allowlisted hosts) |
 

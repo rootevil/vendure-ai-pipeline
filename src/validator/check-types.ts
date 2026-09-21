@@ -25,6 +25,8 @@ export type DatabaseExecutor = (input: {
   readonly fixturePath?: string;
   readonly connectionString?: string;
   readonly query: string;
+  readonly params?: readonly unknown[];
+  readonly controlledQueryId?: string;
   readonly workspaceDir: string;
 }) => Promise<DatabaseQueryResult>;
 

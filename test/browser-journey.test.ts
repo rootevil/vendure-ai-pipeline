@@ -66,7 +66,20 @@ test('browser checkout scenario PASSes with numbered screenshots and playwright-
     assert.ok(checks.includes('graphql-query-order'));
     assert.ok(checks.includes('graphql-query-customer-orders'));
     assert.ok(checks.includes('api-order-state'));
+    assert.ok(checks.includes('database-order-by-code'));
     assert.ok(result.validationChecks.every((c) => c.status === 'PASS'));
+
+    const dbEvidence = join(result.artifactDir, 'validation', 'database-order-by-code.json');
+    assert.ok(existsSync(dbEvidence));
+    const dbPayload = JSON.parse(readFileSync(dbEvidence, 'utf8')) as {
+      output?: string;
+      status: string;
+    };
+    assert.equal(dbPayload.status, 'PASS');
+    assert.ok(
+      dbPayload.output?.includes('PaymentSettled') ||
+        JSON.stringify(dbPayload).includes('PaymentSettled'),
+    );
 
     const verdict = JSON.parse(
       readFileSync(join(result.artifactDir, 'validator-verdict.json'), 'utf8'),

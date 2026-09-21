@@ -1,6 +1,7 @@
 import type { ValidationCheckResult, ValidationStep } from '../../models/types.js';
 import { createCheckResult } from '../check-result.js';
 import type { CheckRunnerContext } from '../check-types.js';
+import { resolveControlledQuery } from '../controlled-sql.js';
 import { valueContains, valuesEqual } from '../database-executor.js';
 
 export async function runDatabaseStateCheck(
@@ -8,7 +9,10 @@ export async function runDatabaseStateCheck(
   ctx: CheckRunnerContext,
 ): Promise<ValidationCheckResult> {
   const evidenceFile = `${step.id}.json`;
-  const expectedParts: string[] = [`${step.driver} query ${JSON.stringify(step.query)}`];
+  const resolvedQuery = resolveQueryLabel(step);
+  const expectedParts: string[] = [
+    `${step.driver} ${resolvedQuery.label}`,
+  ];
   if (step.expectEquals !== undefined) {
     expectedParts.push(`equals ${JSON.stringify(step.expectEquals)}`);
   }
@@ -21,6 +25,18 @@ export async function runDatabaseStateCheck(
   const expected = expectedParts.join('; ');
 
   try {
+    if (!step.query && !step.controlledQueryId) {
+      return createCheckResult({
+        checkName: step.id,
+        status: 'ERROR',
+        expected,
+        actual: 'database_state requires query or controlledQueryId',
+        output: '',
+        evidenceDir: ctx.evidenceDir,
+        evidenceFileName: evidenceFile,
+        ...(ctx.now !== undefined ? { now: ctx.now } : {}),
+      });
+    }
     if (step.driver === 'json_fixture' && !step.fixturePath) {
       return createCheckResult({
         checkName: step.id,
@@ -45,29 +61,48 @@ export async function runDatabaseStateCheck(
         ...(ctx.now !== undefined ? { now: ctx.now } : {}),
       });
     }
+    if (step.driver === 'postgres' && !step.controlledQueryId) {
+      return createCheckResult({
+        checkName: step.id,
+        status: 'ERROR',
+        expected,
+        actual: 'postgres driver requires controlledQueryId (no free-form SQL)',
+        output: '',
+        evidenceDir: ctx.evidenceDir,
+        evidenceFileName: evidenceFile,
+        ...(ctx.now !== undefined ? { now: ctx.now } : {}),
+      });
+    }
 
     const result = await ctx.executeDatabase({
       driver: step.driver,
       ...(step.fixturePath !== undefined ? { fixturePath: step.fixturePath } : {}),
       ...(step.connectionString !== undefined ? { connectionString: step.connectionString } : {}),
-      query: step.query,
+      query: step.query ?? resolvedQuery.sql,
+      params: step.params ?? [],
+      ...(step.controlledQueryId !== undefined
+        ? { controlledQueryId: step.controlledQueryId }
+        : {}),
       workspaceDir: ctx.context.workspaceDir,
     });
 
+    const actualValue = result.value !== undefined ? result.value : result.rows;
     const failures: string[] = [];
     if (step.expectEquals !== undefined) {
-      const actualValue = result.value !== undefined ? result.value : result.rows;
       if (!valuesEqual(step.expectEquals, actualValue)) {
-        failures.push(`expectedEquals mismatch`);
+        failures.push(
+          `expectedEquals mismatch: expected=${JSON.stringify(step.expectEquals)} actual=${JSON.stringify(actualValue)}`,
+        );
       }
     }
     if (step.expectRowCount !== undefined && result.rowCount !== step.expectRowCount) {
       failures.push(`rowCount ${result.rowCount} !== ${step.expectRowCount}`);
     }
     if (step.expectContains !== undefined) {
-      const haystack = result.value !== undefined ? result.value : result.rows;
-      if (!valueContains(haystack, step.expectContains)) {
-        failures.push('expectContains mismatch');
+      if (!valueContains(actualValue, step.expectContains)) {
+        failures.push(
+          `expectContains mismatch: needle=${JSON.stringify(step.expectContains)} actual=${JSON.stringify(actualValue)}`,
+        );
       }
     }
     if (
@@ -83,9 +118,19 @@ export async function runDatabaseStateCheck(
       checkName: step.id,
       status: passed ? 'PASS' : 'FAIL',
       expected,
-      actual: passed ? `rowCount=${result.rowCount}` : failures.join('; '),
+      actual: passed
+        ? `rowCount=${result.rowCount}; actual=${JSON.stringify(actualValue)}`
+        : failures.join('; '),
       output: JSON.stringify(
-        { rowCount: result.rowCount, value: result.value, rows: result.rows },
+        {
+          controlledQueryId: step.controlledQueryId ?? null,
+          sql: resolvedQuery.sql || null,
+          params: step.params ?? [],
+          expectedEquals: step.expectEquals ?? null,
+          actual: actualValue,
+          rowCount: result.rowCount,
+          rows: result.rows,
+        },
         null,
         2,
       ).slice(0, 4000),
@@ -105,4 +150,28 @@ export async function runDatabaseStateCheck(
       ...(ctx.now !== undefined ? { now: ctx.now } : {}),
     });
   }
+}
+
+function resolveQueryLabel(step: Extract<ValidationStep, { type: 'database_state' }>): {
+  readonly label: string;
+  readonly sql: string;
+} {
+  if (step.controlledQueryId) {
+    try {
+      const controlled = resolveControlledQuery(step.controlledQueryId);
+      return {
+        label: `controlled:${controlled.id} ${JSON.stringify(controlled.sql)} params=${JSON.stringify(step.params ?? [])}`,
+        sql: controlled.sql,
+      };
+    } catch {
+      return {
+        label: `controlled:${step.controlledQueryId}`,
+        sql: '',
+      };
+    }
+  }
+  return {
+    label: `query ${JSON.stringify(step.query ?? '')}`,
+    sql: step.query ?? '',
+  };
 }

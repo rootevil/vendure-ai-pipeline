@@ -11,6 +11,11 @@ import {
   createFakeJourneyBrowserLauncher,
   type FakeJourneyPageState,
 } from '../../validator/browser-launcher.js';
+import {
+  buildOrderTableFixture,
+  buildPostApiDatabaseSteps,
+  ORDER_FIXTURE_PATH,
+} from './database-checks.js';
 import { startBrowserCheckoutDemoStorefront, type DemoStorefrontHandle } from './demo-storefront.js';
 import {
   buildPostBrowserGraphqlSteps,
@@ -25,6 +30,8 @@ export interface BrowserCheckoutScenarioOptions {
   readonly keepWorkspace?: boolean;
   readonly useRealBrowser?: boolean;
   readonly productName?: string;
+  /** Optional live Postgres URL; demo defaults to controlled json_fixture. */
+  readonly postgresConnectionString?: string;
 }
 
 export interface BrowserCheckoutScenarioResult {
@@ -35,12 +42,13 @@ export interface BrowserCheckoutScenarioResult {
 }
 
 /**
- * Dual-evidence checkout demo:
+ * Triple-evidence checkout demo:
  *
  *   1) Playwright browser journey (screenshots)
- *   2) Independent GraphQL/API product + order queries (api-responses/)
+ *   2) Independent GraphQL/API product + order queries
+ *   3) Controlled DB query: SELECT id, state FROM "order" WHERE code = $1
  *
- * Browser evidence alone is not enough — backend state must match.
+ * Agents never run free-form SQL — only allowlisted controlledQueryId.
  */
 export async function runBrowserCheckoutScenario(
   options: BrowserCheckoutScenarioOptions = {},
@@ -53,6 +61,14 @@ export async function runBrowserCheckoutScenario(
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(artifactsDir, { recursive: true });
 
+  const runWorkspace = join(workspaceDir, runId);
+  mkdirSync(join(runWorkspace, 'data'), { recursive: true });
+  writeFileSync(
+    join(runWorkspace, ORDER_FIXTURE_PATH),
+    `${JSON.stringify(buildOrderTableFixture({ orderCode: DEMO_ORDER_CODE }), null, 2)}\n`,
+    'utf8',
+  );
+
   let server: DemoStorefrontHandle | null = null;
   try {
     server = await startBrowserCheckoutDemoStorefront({
@@ -64,6 +80,9 @@ export async function runBrowserCheckoutScenario(
       baseUrl: server.baseUrl,
       productName,
       keepWorkspace: options.keepWorkspace === true,
+      ...(options.postgresConnectionString !== undefined
+        ? { postgresConnectionString: options.postgresConnectionString }
+        : {}),
     });
     writeFileSync(join(root, 'task.json'), `${JSON.stringify(task, null, 2)}\n`, 'utf8');
 
@@ -132,6 +151,7 @@ export function buildBrowserCheckoutTask(input: {
   readonly baseUrl: string;
   readonly productName?: string;
   readonly keepWorkspace?: boolean;
+  readonly postgresConnectionString?: string;
 }): TaskDefinition {
   const productName = input.productName ?? 'Soft Pink Almond';
   const journey = buildCheckoutJourneyStep({
@@ -144,11 +164,17 @@ export function buildBrowserCheckoutTask(input: {
     orderCode: DEMO_ORDER_CODE,
     customerEmail: DEMO_CUSTOMER_EMAIL,
   });
+  const databaseSteps = buildPostApiDatabaseSteps({
+    orderCode: DEMO_ORDER_CODE,
+    ...(input.postgresConnectionString !== undefined
+      ? { postgresConnectionString: input.postgresConnectionString }
+      : {}),
+  });
 
   return {
     id: 'browser-checkout-demo',
-    title: 'Browser + GraphQL checkout validation demo',
-    goal: 'Prove dual evidence: Playwright screenshots plus independent Shop API product/order queries',
+    title: 'Browser + GraphQL + DB checkout validation demo',
+    goal: 'Prove triple evidence: Playwright, Shop API, and controlled order SQL expected/actual',
     acceptanceCriteria: [
       'Storefront home loads',
       'Product page is reachable from the catalog',
@@ -156,12 +182,17 @@ export function buildBrowserCheckoutTask(input: {
       'Checkout shows order confirmation',
       'GraphQL product query returns the expected product',
       'GraphQL order/customer queries confirm backend order state',
+      'Controlled DB query returns expected order id and state',
     ],
     allowedTools: ['filesystem', 'mock'],
     timeoutMs: 90_000,
     retryPolicy: { maxIdenticalRetries: 1, maxTotalAttempts: 2 },
-    // Browser first, then independent GraphQL/API — never trust UI alone.
-    validationSteps: [{ id: 'evidence', type: 'evidence_present' }, journey, ...graphqlSteps],
+    validationSteps: [
+      { id: 'evidence', type: 'evidence_present' },
+      journey,
+      ...graphqlSteps,
+      ...databaseSteps,
+    ],
     mode: 'acceptance',
     sourcePaths: [],
     writeAllowlist: ['src', 'data'],
@@ -202,11 +233,24 @@ export function buildBrowserCheckoutTask(input: {
         expectedChecks: ['graphql_request', 'http_response'],
         cleanup: ['API response payloads retained under api-responses/'],
       },
+      {
+        id: 'database-validation',
+        description: 'Controlled PostgreSQL/json_fixture order query (no free-form agent SQL)',
+        preconditions: ['Order fixture or allowlisted postgres available'],
+        actions: [
+          'Run controlled SELECT id, state FROM "order" WHERE code = $1',
+          'Compare expected vs actual rows',
+        ],
+        expectedChecks: ['database_state'],
+        cleanup: ['Query evidence retained under validation/'],
+      },
     ],
     circuitBreakRules: [
       'Agent claimed success never grants PASS',
       'Browser screenshots alone never grant PASS without GraphQL/API evidence',
-      'Playwright + GraphQL evidence together decide PASS or BLOCK',
+      'Agents must not run free-form or destructive SQL',
+      'Only controlledQueryId allowlisted SELECTs may query the database',
+      'Playwright + GraphQL + controlled DB evidence together decide PASS or BLOCK',
     ],
     cleanupWorkspace: input.keepWorkspace !== true,
   };

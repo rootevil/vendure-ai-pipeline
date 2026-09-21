@@ -169,6 +169,7 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 - [SCENARIO_COMPILER.md](./SCENARIO_COMPILER.md) — business → technical-task.json  
 - [BROWSER_VALIDATION.md](./BROWSER_VALIDATION.md) — Playwright storefront → checkout demo  
 - [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md) — independent Shop API evidence after browser  
+- [DATABASE_VALIDATION.md](./DATABASE_VALIDATION.md) — controlled order SQL expected vs actual  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
 - [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  

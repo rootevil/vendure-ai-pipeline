@@ -23,6 +23,7 @@ const summary = {
       `${result.artifactDir}/api-responses/graphql-query-customer-orders.json`,
       `${result.artifactDir}/api-responses/api-order-state.json`,
     ],
+    database: `${result.artifactDir}/validation/database-order-by-code.json`,
   },
   playwrightResults: `${result.artifactDir}/playwright-results.json`,
   validatorVerdict: `${result.artifactDir}/validator-verdict.json`,

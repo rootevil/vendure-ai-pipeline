@@ -2,6 +2,11 @@ import { isAbsolute } from 'node:path';
 
 import type { AllowedTool, TaskDefinition, ValidationStep } from '../models/types.js';
 import { assertSafeScreenshotName } from '../safety/redaction.js';
+import {
+  assertControlledQueryParams,
+  assertSafeReadOnlySql,
+  resolveControlledQuery,
+} from '../validator/controlled-sql.js';
 import { TaskDefinitionError } from './task-definition.js';
 
 const FORBIDDEN_TOOL_NAMES = new Set([
@@ -154,6 +159,25 @@ function validateStep(step: ValidationStep, allowedTools: readonly AllowedTool[]
           errors.push(`validationSteps.${step.id} postgres requires connectionString`);
         } else if (/prod|production|live|amazonaws|azure|googleapis/i.test(step.connectionString)) {
           errors.push(`validationSteps.${step.id} refuses production-looking connection strings`);
+        }
+        if (!step.controlledQueryId) {
+          errors.push(
+            `validationSteps.${step.id} postgres requires controlledQueryId (no free-form SQL)`,
+          );
+        }
+      }
+      if (!step.query && !step.controlledQueryId) {
+        errors.push(`validationSteps.${step.id} requires query or controlledQueryId`);
+      }
+      if (step.controlledQueryId) {
+        try {
+          const controlled = resolveControlledQuery(step.controlledQueryId);
+          assertSafeReadOnlySql(controlled.sql);
+          assertControlledQueryParams(controlled, step.params ?? []);
+        } catch (error) {
+          errors.push(
+            `validationSteps.${step.id}.controlledQueryId: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
       if (

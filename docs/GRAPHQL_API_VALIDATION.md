@@ -60,4 +60,4 @@ cat artifacts/<runId>/validator-verdict.json
 | `src/scenarios/browser-checkout/demo-storefront.ts` | HTML + `/shop-api` + `/api/*` |
 | `src/validator/checks/graphql.ts` | `graphql_request` check runner |
 
-See [BROWSER_VALIDATION.md](./BROWSER_VALIDATION.md), [VALIDATION.md](./VALIDATION.md).
+See [BROWSER_VALIDATION.md](./BROWSER_VALIDATION.md), [DATABASE_VALIDATION.md](./DATABASE_VALIDATION.md), [VALIDATION.md](./VALIDATION.md).

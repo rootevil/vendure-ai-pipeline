@@ -46,13 +46,14 @@ artifacts/<runId>/validator-verdict.json
 
 ## Dual evidence (required)
 
-After the browser journey, the same demo runs **independent** Shop API checks:
+After the browser journey, the same demo runs **independent** Shop API checks and a **controlled** DB query:
 
 ```text
 GraphQL → query product → query customer/order → verify expected state
+PostgreSQL / fixture → SELECT id, state FROM "order" WHERE code = $1 → expected vs actual
 ```
 
-See [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md). Browser screenshots alone never grant PASS.
+See [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md) and [DATABASE_VALIDATION.md](./DATABASE_VALIDATION.md). Browser screenshots alone never grant PASS.
 
 ## Check types
 

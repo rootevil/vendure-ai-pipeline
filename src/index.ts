@@ -191,6 +191,19 @@ export {
   DEMO_ORDER_CODE,
   DEMO_CUSTOMER_EMAIL,
 } from './scenarios/browser-checkout/graphql-checks.js';
+export {
+  buildPostApiDatabaseSteps,
+  buildOrderTableFixture,
+  ORDER_FIXTURE_PATH,
+  DEMO_ORDER_ID,
+  DEMO_ORDER_STATE,
+} from './scenarios/browser-checkout/database-checks.js';
+export {
+  assertSafeReadOnlySql,
+  resolveControlledQuery,
+  listControlledValidatorQueries,
+  ORDER_BY_CODE_QUERY,
+} from './validator/controlled-sql.js';
 export { validateRunDir, type ValidateRunDirResult } from './validator/validate-run-dir.js';
 export {
   createWorkspaceCheckpoint,
