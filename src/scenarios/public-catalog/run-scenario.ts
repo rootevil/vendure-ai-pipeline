@@ -37,7 +37,7 @@ export async function runPublicCatalogScenario(
   const root = options.rootDir ?? mkdtempSync(join(tmpdir(), 'vendure-catalog-scenario-'));
   const runId = options.runId ?? `catalog-${Date.now()}`;
   const workspaceDir = join(root, 'workspace');
-  const artifactsDir = join(root, 'runs');
+  const artifactsDir = join(root, 'artifacts');
   mkdirSync(workspaceDir, { recursive: true });
   mkdirSync(artifactsDir, { recursive: true });
 
@@ -51,6 +51,11 @@ export async function runPublicCatalogScenario(
     const taskPath = join(root, 'task.json');
     writeFileSync(taskPath, `${JSON.stringify(task, null, 2)}\n`, 'utf8');
 
+    const useRealBrowser =
+      options.useRealBrowser === true || process.env.PIPELINE_USE_REAL_BROWSER === '1';
+    const agentMode =
+      process.env.PIPELINE_AGENT_MODE === 'openhands' ? 'openhands' : 'mock';
+
     const config: PipelineConfig = {
       mode: 'acceptance',
       artifactsDir,
@@ -61,7 +66,7 @@ export async function runPublicCatalogScenario(
       logLevel: 'info',
       runId,
       writeAllowlist: [...task.writeAllowlist],
-      agentMode: 'mock',
+      agentMode,
       agentTimeoutMs: task.timeoutMs,
       openhandsCommand: 'openhands',
       mockAgentBehavior: 'success',
@@ -70,9 +75,13 @@ export async function runPublicCatalogScenario(
     const runner = new TaskRunner({
       config,
       logger: createLogger({ level: 'info' }),
-      agent: new PublicCatalogScenarioAgent(),
+      // Default: purpose-built scenario agent applying the published reference adapter.
+      // Set PIPELINE_AGENT_MODE=openhands to exercise the OpenHands adapter instead.
+      ...(agentMode === 'openhands'
+        ? {}
+        : { agent: new PublicCatalogScenarioAgent() }),
       runTests: async () => runAcceptanceTests(appDir),
-      ...(options.useRealBrowser
+      ...(useRealBrowser
         ? {}
         : {
             launchBrowser: createFakeBrowserLauncher({

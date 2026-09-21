@@ -12,6 +12,7 @@ import {
   SafetyError,
   type ExecutionContext,
 } from '../safety/execution-context.js';
+import { createWorkspaceCheckpoint } from '../safety/workspace-checkpoint.js';
 import type { Validator } from '../validator/validator.js';
 
 export interface PipelineControllerDependencies {
@@ -53,6 +54,12 @@ export class PipelineController {
     let lastOutcome: AgentRunOutcome | null = null;
     let stopReason: string | null = null;
     let authRequired = false;
+
+    createWorkspaceCheckpoint({
+      workspaceDir: context.workspaceDir,
+      artifactDir: context.artifactDir,
+      now: nowFn,
+    });
 
     try {
       assertNetworkAllowed(context.allowNetwork, false);

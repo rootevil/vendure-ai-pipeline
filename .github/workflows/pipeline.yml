@@ -1,0 +1,114 @@
+name: pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: 'Task card path (JSON or evaluation-demo/task.md)'
+        required: true
+        default: 'evaluation-demo/task.md'
+      mode:
+        description: 'Pipeline mode'
+        required: true
+        default: 'acceptance'
+        type: choice
+        options:
+          - acceptance
+          - baseline
+          - full
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PIPELINE_MODE: ${{ inputs.mode }}
+      PIPELINE_ARTIFACTS_DIR: artifacts
+      PIPELINE_WORKSPACE_DIR: workspace
+      PIPELINE_ALLOW_NETWORK: 'true'
+      PIPELINE_AGENT_MODE: mock
+      PIPELINE_LOG_LEVEL: info
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Run task (public catalog for task.md; JSON otherwise)
+        id: run
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts workspace
+          TASK='${{ inputs.task }}'
+          if [[ "${TASK}" == *task.md ]] || [[ "${TASK}" == evaluation-demo/task.md ]]; then
+            npm run scenario:public-catalog
+            # Copy latest scenario evidence into artifacts/ for upload
+            LATEST="$(ls -1dt /tmp/vendure-catalog-scenario-* 2>/dev/null | head -1 || true)"
+            if [[ -z "${LATEST}" ]]; then
+              # scenario writes under OS temp; also check local artifacts from env override
+              echo "Looking for scenario evidence under artifacts/"
+            fi
+            # Prefer copying from PIPELINE-style local runs if present
+            if [[ -d artifacts ]] && [[ -n "$(ls -A artifacts 2>/dev/null || true)" ]]; then
+              echo "artifacts already populated"
+            fi
+            # Re-run with fixed root so evidence lands in ./artifacts
+            node --import tsx -e "
+              import { runPublicCatalogScenario } from './src/scenarios/public-catalog/run-scenario.ts';
+              import { mkdirSync } from 'node:fs';
+              mkdirSync('artifacts', { recursive: true });
+              mkdirSync('workspace', { recursive: true });
+              const r = await runPublicCatalogScenario({
+                rootDir: process.cwd(),
+                runId: 'gha-${Date.now()}',
+                keepWorkspace: false,
+                useRealBrowser: process.env.PIPELINE_USE_REAL_BROWSER === '1',
+              });
+              console.log(JSON.stringify({ status: r.result.status, exitCode: r.result.exitCode, artifactDir: r.result.artifactDir }, null, 2));
+              process.exit(r.result.exitCode);
+            "
+          else
+            npm run pipeline -- run --task "${TASK}"
+          fi
+
+      - name: Independent validator (artifact-only)
+        run: |
+          set -euo pipefail
+          RUN_DIR="$(ls -1dt artifacts/* 2>/dev/null | head -1)"
+          if [[ -z "${RUN_DIR}" ]]; then
+            echo "No artifacts/<run_id> directory found" >&2
+            exit 1
+          fi
+          echo "Validating ${RUN_DIR}"
+          node packages/validator/bin/validate.mjs --run-dir "${RUN_DIR}"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-${{ github.run_id }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 14

@@ -1,0 +1,7 @@
+{
+  "name": "@vendure-ai-pipeline/evidence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Evidence pack helpers (implemented under src/evidence; package surface for Architecture layout)"
+}

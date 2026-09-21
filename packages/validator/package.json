@@ -1,0 +1,10 @@
+{
+  "name": "@vendure-ai-pipeline/validator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Independent PASS/BLOCK validator CLI (artifact-only; no LLM)",
+  "bin": {
+    "vendure-validate": "./bin/validate.mjs"
+  }
+}

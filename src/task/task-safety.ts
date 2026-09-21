@@ -123,6 +123,22 @@ function validateStep(step: ValidationStep, allowedTools: readonly AllowedTool[]
         errors.push(`validationSteps.${step.id} requires at least one database expectation`);
       }
       break;
+    case 'path_invariant':
+      errors.push(...validateRelativeSafePath(step.root, `validationSteps.${step.id}.root`));
+      for (const rel of step.requiredRelativePaths) {
+        errors.push(
+          ...validateRelativeSafePath(rel, `validationSteps.${step.id}.requiredRelativePaths`),
+        );
+      }
+      if (!step.requiredRelativePaths.some((rel) => rel.includes('/'))) {
+        errors.push(
+          `validationSteps.${step.id} requiredRelativePaths must include at least one nested path`,
+        );
+      }
+      break;
+    case 'redis_ping':
+    case 'postgres_ready':
+      break;
     default: {
       const exhaustive: never = step;
       errors.push(`unsupported validation step: ${JSON.stringify(exhaustive)}`);

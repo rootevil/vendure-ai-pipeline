@@ -54,7 +54,7 @@ const MockBehaviorSchema = z.enum([
 
 const PipelineConfigSchema = z.object({
   mode: RunModeSchema.default('acceptance'),
-  artifactsDir: z.string().min(1).default('./runs'),
+  artifactsDir: z.string().min(1).default('./artifacts'),
   workspaceDir: z.string().min(1).default('./workspace'),
   maxIdenticalRetries: z.number().int().positive().default(3),
   maxTotalAttempts: z.number().int().positive().default(5),

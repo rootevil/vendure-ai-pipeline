@@ -67,7 +67,7 @@ test('public catalog scenario BLOCKs when agent does not fix the adapter', async
   const root = mkdtempSync(join(tmpdir(), 'scenario-block-'));
   const runId = 'scenario-block';
   const workspaceDir = join(root, 'workspace');
-  const artifactsDir = join(root, 'runs');
+  const artifactsDir = join(root, 'artifacts');
   try {
     materializeEvaluationDemo(join(workspaceDir, runId));
     const appDir = join(workspaceDir, runId, 'evaluation-demo', 'app');

@@ -145,3 +145,16 @@ export {
   REPAIR_BRIEF_RELATIVE,
   type RepairBrief,
 } from './scenarios/public-catalog/failure-agents.js';
+export {
+  runNailPatternsScenario,
+  type NailPatternsScenarioOptions,
+  type NailPatternsScenarioResult,
+} from './scenarios/nail-patterns/run-scenario.js';
+export { NailPatternsScenarioAgent } from './scenarios/nail-patterns/scenario-agent.js';
+export { validateRunDir, type ValidateRunDirResult } from './validator/validate-run-dir.js';
+export {
+  createWorkspaceCheckpoint,
+  restoreWorkspaceCheckpoint,
+  type CheckpointMeta,
+} from './safety/workspace-checkpoint.js';
+export { loadTaskDefinitionFromPath } from './task/task-card.js';

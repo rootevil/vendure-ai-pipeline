@@ -1,0 +1,55 @@
+{
+  "id": "stack-deps-health",
+  "title": "Docker stack Postgres/Redis readiness",
+  "goal": "Confirm disposable Postgres and Redis from the Compose stack respond to health probes from the pipeline runner.",
+  "acceptanceCriteria": [
+    "redis-cli PING returns PONG",
+    "pg_isready reports accepting connections"
+  ],
+  "allowedTools": ["filesystem", "mock"],
+  "timeoutMs": 60000,
+  "retryPolicy": {
+    "maxIdenticalRetries": 1,
+    "maxTotalAttempts": 2
+  },
+  "validationSteps": [
+    { "id": "evidence", "type": "evidence_present" },
+    {
+      "id": "redis",
+      "type": "redis_ping",
+      "timeoutMs": 5000
+    },
+    {
+      "id": "postgres",
+      "type": "postgres_ready",
+      "timeoutMs": 5000
+    }
+  ],
+  "mode": "acceptance",
+  "sourcePaths": [],
+  "writeAllowlist": ["fixtures"],
+  "requiredEvidence": [
+    "run-manifest.json",
+    "status.json",
+    "stdout.log",
+    "stderr.log",
+    "change-summary.md",
+    "rollback.md",
+    "summary.md"
+  ],
+  "stages": [
+    {
+      "id": "probe",
+      "description": "Ping Redis and Postgres inside the isolated Compose network",
+      "preconditions": ["Compose stack healthy"],
+      "actions": ["redis_ping", "postgres_ready"],
+      "expectedChecks": ["Both services ready"],
+      "cleanup": []
+    }
+  ],
+  "circuitBreakRules": [
+    "Do not connect to production databases",
+    "Use only disposable Compose credentials"
+  ],
+  "cleanupWorkspace": true
+}

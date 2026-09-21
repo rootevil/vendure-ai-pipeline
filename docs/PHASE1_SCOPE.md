@@ -105,7 +105,7 @@ node packages/validator/bin/validate.mjs --run-dir artifacts/<run_id>
 
 ```bash
 ./scripts/start.sh --task evaluation-demo/task.md
-./scripts/check.sh
+./scripts/check.sh   # optional: Docker stack health (Postgres/Redis)
 ./scripts/cleanup.sh
 ```
 
@@ -115,4 +115,11 @@ node packages/validator/bin/validate.mjs --run-dir artifacts/<run_id>
 gh workflow run pipeline.yml -f task=evaluation-demo/task.md
 gh run watch
 gh run download --name evidence-<run_id>
+```
+
+### Additional Phase 1 path task (P1-10)
+
+```bash
+npm run scenario:nail-patterns
+node packages/validator/bin/validate.mjs --run-dir artifacts/$(ls -1t artifacts | head -1)
 ```

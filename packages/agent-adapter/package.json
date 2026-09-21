@@ -1,0 +1,7 @@
+{
+  "name": "@vendure-ai-pipeline/agent-adapter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "OpenHands / mock agent adapters (implemented under src/agent)"
+}

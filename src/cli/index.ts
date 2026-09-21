@@ -5,7 +5,8 @@ import { pathToFileURL } from 'node:url';
 import { loadConfig, ConfigError } from '../config/load-config.js';
 import { TaskRunner } from '../execution/task-runner.js';
 import { createLogger } from '../logging/logger.js';
-import { loadTaskDefinitionFromJsonFile, TaskDefinitionError } from '../task/task-definition.js';
+import { TaskDefinitionError } from '../task/task-definition.js';
+import { loadTaskDefinitionFromPath } from '../task/task-card.js';
 
 export interface CliDependencies {
   readonly env?: NodeJS.ProcessEnv;
@@ -18,7 +19,7 @@ function printUsage(stream: NodeJS.WritableStream): void {
   stream.write(
     [
       'Usage:',
-      '  vendure-pipeline run --task <path-to-task.json>',
+      '  vendure-pipeline run --task <path-to-task.json|task.md>',
       '',
       'Flow:',
       '  TASK → parse/validate → isolated run → agent → changes → validators',
@@ -81,7 +82,7 @@ export async function runCli(deps: CliDependencies = {}): Promise<number> {
       stdout,
       stderr,
     });
-    const task = loadTaskDefinitionFromJsonFile(resolve(taskPath));
+    const task = loadTaskDefinitionFromPath(resolve(taskPath));
     const runner = new TaskRunner({ config, logger });
     const result = await runner.execute(task);
     stdout.write(`${JSON.stringify(result, null, 2)}\n`);

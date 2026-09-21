@@ -1,0 +1,7 @@
+{
+  "name": "@vendure-ai-pipeline/scenario",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Task card → scenario compilers (implemented under src/task and src/scenarios)"
+}

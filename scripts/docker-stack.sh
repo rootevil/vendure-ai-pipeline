@@ -15,6 +15,19 @@ die() {
   exit 1
 }
 
+ensure_docker() {
+  if ! command -v docker >/dev/null 2>&1 && ! command -v docker-compose >/dev/null 2>&1; then
+    die "Docker is not installed."
+  fi
+  if [[ -z "${DOCKER_HOST:-}" ]] && [[ -S "${HOME}/.colima/docker.sock" ]]; then
+    export DOCKER_HOST="unix://${HOME}/.colima/docker.sock"
+    log "Using Colima docker socket via DOCKER_HOST=${DOCKER_HOST}"
+  fi
+  if ! docker info >/dev/null 2>&1; then
+    die "Docker daemon is not reachable. On macOS with Colima: 'colima start' then export DOCKER_HOST=unix://\$HOME/.colima/docker.sock"
+  fi
+}
+
 ensure_env_file() {
   if [[ ! -f "${ENV_FILE}" ]]; then
     cp "${ENV_EXAMPLE}" "${ENV_FILE}"
@@ -100,6 +113,7 @@ ${remaining}"
 }
 
 cmd="${1:-}"
+ensure_docker
 case "${cmd}" in
   start)
     ensure_env_file

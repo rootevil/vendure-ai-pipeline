@@ -6,6 +6,8 @@ import { runDatabaseStateCheck } from './checks/database.js';
 import { runGraphqlRequestCheck } from './checks/graphql.js';
 import { runApplicationHealthCheck } from './checks/health.js';
 import { runHttpResponseCheck } from './checks/http.js';
+import { runPathInvariantCheck } from './checks/path-invariant.js';
+import { runPostgresReadyCheck, runRedisPingCheck } from './checks/service-ping.js';
 import { runWorkspaceCheck } from './checks/workspace.js';
 import { defaultDatabaseExecutor } from './database-executor.js';
 import { defaultHttpFetcher } from './http-fetcher.js';
@@ -30,6 +32,12 @@ export async function runIndependentCheck(
       return runDatabaseStateCheck(step, ctx);
     case 'browser_playwright':
       return runBrowserPlaywrightCheck(step, ctx);
+    case 'path_invariant':
+      return runPathInvariantCheck(step, ctx);
+    case 'redis_ping':
+      return runRedisPingCheck(step, ctx);
+    case 'postgres_ready':
+      return runPostgresReadyCheck(step, ctx);
     default: {
       const exhaustive: never = step;
       throw new Error(`Unsupported validation step: ${JSON.stringify(exhaustive)}`);

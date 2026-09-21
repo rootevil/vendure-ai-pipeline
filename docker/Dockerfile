@@ -3,11 +3,14 @@
 # Pinned Node 20 bookworm slim for reproducible non-production builds.
 FROM node:20.20-bookworm-slim AS deps
 WORKDIR /app
+ENV PIPELINE_SKIP_PLAYWRIGHT_INSTALL=1
 COPY package.json package-lock.json ./
+COPY scripts/ensure-playwright-browsers.mjs ./scripts/ensure-playwright-browsers.mjs
 RUN npm ci
 
 FROM node:20.20-bookworm-slim AS build
 WORKDIR /app
+ENV PIPELINE_SKIP_PLAYWRIGHT_INSTALL=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
@@ -26,6 +29,7 @@ ENV NODE_ENV=development \
     PIPELINE_ALLOW_NETWORK=false \
     PIPELINE_LOG_LEVEL=info \
     PIPELINE_HEALTH_REQUIRE_DEPS=true \
+    PIPELINE_SKIP_PLAYWRIGHT_INSTALL=1 \
     NPM_CONFIG_UPDATE_NOTIFIER=false
 
 RUN apt-get update \

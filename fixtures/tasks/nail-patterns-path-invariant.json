@@ -1,0 +1,91 @@
+{
+  "id": "nail-patterns-path-invariant",
+  "title": "Nail-patterns relative path invariant check",
+  "goal": "Preserve evaluation-demo/assets/nail-patterns nested subdirectory structure without flattening or renaming. Emit a path inventory the independent validator can check.",
+  "acceptanceCriteria": [
+    "Nested directories such as 1/1 and 设计者10/1 remain addressable by relative path",
+    "Required sample files exist under their original relative paths",
+    "At least 190 image files remain under the nail-patterns tree",
+    "Files are not all flattened into the nail-patterns root"
+  ],
+  "allowedTools": ["filesystem", "mock"],
+  "timeoutMs": 120000,
+  "retryPolicy": {
+    "maxIdenticalRetries": 2,
+    "maxTotalAttempts": 3
+  },
+  "validationSteps": [
+    { "id": "evidence", "type": "evidence_present" },
+    {
+      "id": "inventory-exists",
+      "type": "workspace_file_exists",
+      "path": "evaluation-demo/assets/nail-patterns-inventory.json"
+    },
+    {
+      "id": "inventory-mentions-nested",
+      "type": "workspace_file_contains",
+      "path": "evaluation-demo/assets/nail-patterns-inventory.json",
+      "contains": "设计者10/1/"
+    },
+    {
+      "id": "nail-patterns-tree",
+      "type": "path_invariant",
+      "root": "evaluation-demo/assets/nail-patterns",
+      "requiredRelativePaths": [
+        "1/1",
+        "设计者10/1/1.jpg",
+        "5/1",
+        "README.md"
+      ],
+      "minFiles": 190,
+      "allowedExtensions": [".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG", ".md"]
+    }
+  ],
+  "mode": "acceptance",
+  "sourcePaths": [
+    "evaluation-demo/assets/nail-patterns",
+    "evaluation-demo/assets/nail-patterns/README.md"
+  ],
+  "writeAllowlist": ["evaluation-demo/assets"],
+  "requiredEvidence": [
+    "run-manifest.json",
+    "status.json",
+    "stdout.log",
+    "stderr.log",
+    "change-summary.md",
+    "rollback.md",
+    "summary.md"
+  ],
+  "stages": [
+    {
+      "id": "materialize",
+      "description": "Copy nail-patterns tree into the isolated workspace preserving relative paths",
+      "preconditions": ["Source assets available under evaluation-demo/assets/nail-patterns"],
+      "actions": ["Recursive copy without flatten/rename"],
+      "expectedChecks": ["Nested directories exist"],
+      "cleanup": []
+    },
+    {
+      "id": "inventory",
+      "description": "Write inventory of relative image paths",
+      "preconditions": ["Tree copied"],
+      "actions": ["Write nail-patterns-inventory.json"],
+      "expectedChecks": ["Inventory lists nested paths"],
+      "cleanup": []
+    },
+    {
+      "id": "validate",
+      "description": "Independent path_invariant validation",
+      "preconditions": ["Inventory written"],
+      "actions": ["Run path_invariant checks"],
+      "expectedChecks": ["PASS only when nested paths remain"],
+      "cleanup": ["Optionally remove disposable workspace"]
+    }
+  ],
+  "circuitBreakRules": [
+    "Do not flatten nail-patterns into a single directory",
+    "Do not rename or mix image sets",
+    "Do not access private client repos, minipc, or production"
+  ],
+  "cleanupWorkspace": true
+}

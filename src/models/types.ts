@@ -119,6 +119,31 @@ export const ValidationStepSchema = z.discriminatedUnion('type', [
     screenshotName: z.string().min(1).default('browser.png'),
     timeoutMs: z.number().int().positive().max(120_000).default(15_000),
   }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('path_invariant'),
+    /** Workspace-relative root that must keep nested relative paths. */
+    root: z.string().min(1),
+    /** Paths relative to root that must exist (must include nested entries with `/`). */
+    requiredRelativePaths: z.array(z.string().min(1)).min(1),
+    /** Minimum number of matching files under root (recursive). */
+    minFiles: z.number().int().positive().optional(),
+    allowedExtensions: z.array(z.string().min(1)).default(['.jpg', '.jpeg', '.png', '.JPG', '.JPEG', '.PNG']),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('redis_ping'),
+    /** Redis URL (host/port used). Defaults to REDIS_URL or redis://127.0.0.1:6379/0. */
+    url: z.string().min(1).optional(),
+    timeoutMs: z.number().int().positive().max(120_000).default(5_000),
+  }),
+  z.object({
+    id: z.string().min(1),
+    type: z.literal('postgres_ready'),
+    /** libpq connection URI or individual PG* env. Defaults to DATABASE_URL. */
+    connectionString: z.string().min(1).optional(),
+    timeoutMs: z.number().int().positive().max(120_000).default(5_000),
+  }),
 ]);
 export type ValidationStep = z.infer<typeof ValidationStepSchema>;
 

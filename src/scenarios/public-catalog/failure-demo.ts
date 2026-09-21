@@ -70,7 +70,7 @@ export async function runFailureDemo(options: FailureDemoOptions): Promise<Failu
   const root = options.rootDir ?? mkdtempSync(join(tmpdir(), 'vendure-failure-demo-'));
   const runId = options.runId ?? `failure-${options.mode}-${Date.now()}`;
   const workspaceDir = join(root, 'workspace');
-  const artifactsDir = join(root, 'runs');
+  const artifactsDir = join(root, 'artifacts');
   const maxRepairAttempts = options.maxRepairAttempts ?? 1;
   const logger = options.logger ?? createLogger({ level: 'info' });
   const steps: FailureDemoStep[] = [];
