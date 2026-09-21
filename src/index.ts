@@ -220,6 +220,14 @@ export {
   type CheckpointMeta,
 } from './safety/workspace-checkpoint.js';
 export {
+  createPreAgentCheckpoint,
+  applyRollbackPolicy,
+  type PreAgentCheckpointResult,
+  type RollbackOutcome,
+  type RollbackAction,
+  type GitCheckpointState,
+} from './safety/git-checkpoint.js';
+export {
   redactSecrets,
   truncateAndRedactLog,
   scrubEnvForAgent,

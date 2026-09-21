@@ -65,9 +65,15 @@ Paths outside that directory are rejected (`HOST_FILESYSTEM` / `PATH_ESCAPE`).
 | `src/safety/command-guard.ts` | `GuardingProcessRunner` for agent spawns |
 | `src/safety/execution-context.ts` | Per-run context + path guards |
 | `src/safety/redaction.ts` | Secrets / URL allowlists |
+| `src/safety/git-checkpoint.ts` | Phase 1: git checkpoint → preserve / rollback |
+| `src/safety/workspace-checkpoint.ts` | Filesystem snapshot / restore fallback |
 | `src/task/task-safety.ts` | Task-card preflight |
 
 OpenHands CLI invocations go through `GuardingProcessRunner` (approved `openhands` basename, cwd must be the run workspace).
+
+## Rollback (Phase 1)
+
+See [ROLLBACK.md](./ROLLBACK.md): pre-agent git checkpoint, preserve on success, `git diff` + reset/restore on unrecoverable failure.
 
 ## Explicit non-goals
 

@@ -16,7 +16,7 @@ items below are deferred, environmental, or intentionally soft for the public de
 | Retries | Classified actions with `MAX_RETRIES = 3` and a fail-closed circuit breaker. No unbounded `while (failure) retry()` loop. |
 | Timeouts | Agent and process runner kill on timeout; HTTP/browser steps have `timeoutMs` |
 | Resources | Compose CPU/mem/PID limits; process output hard cap (~4MB) then SIGKILL |
-| Cleanup / restore | Checkpoint restore only under workspace / temp / `PIPELINE_WORKSPACE_DIR` |
+| Cleanup / restore | Pre-agent git checkpoint + filesystem snapshot; preserve on PASS; `git diff` + reset/restore on unrecoverable failure |
 | Production | Stronger connection-string heuristics; refuse prod-like Redis/Postgres targets |
 | Validator bypass | Artifact CLI refuses `PASS` without `validation*.json` check audit |
 | GHA | Task path allowlist; task passed via env (not shell interpolation); default `PIPELINE_ALLOW_NETWORK=false` |

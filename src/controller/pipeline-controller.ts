@@ -12,7 +12,7 @@ import {
   SafetyError,
   type ExecutionContext,
 } from '../safety/execution-context.js';
-import { createWorkspaceCheckpoint } from '../safety/workspace-checkpoint.js';
+import { createPreAgentCheckpoint, applyRollbackPolicy } from '../safety/git-checkpoint.js';
 import type { Validator } from '../validator/validator.js';
 
 export interface PipelineControllerDependencies {
@@ -57,7 +57,7 @@ export class PipelineController {
     let clientDecision = false;
     let hardStop: 'BLOCK' | 'CIRCUIT_BREAK' | null = null;
 
-    createWorkspaceCheckpoint({
+    createPreAgentCheckpoint({
       workspaceDir: context.workspaceDir,
       artifactDir: context.artifactDir,
       now: nowFn,
@@ -249,7 +249,7 @@ export class PipelineController {
           ? lastOutcome.changedFiles.map((file) => `- ${file}`).join('\n')
           : 'No files changed by the agent.',
       rollback:
-        'Rollback: discard the disposable workspace for this runId and retain only artifacts. Do not mutate client main.',
+        'Phase 1 rollback: pre-agent git checkpoint taken; on failure restore workspace; on success preserve evidence. See rollback.md.',
       summary: [
         `# Run Summary`,
         '',
@@ -308,7 +308,7 @@ export class PipelineController {
           ? lastOutcome.changedFiles.map((file) => `- ${file}`).join('\n')
           : 'No files changed by the agent.',
       rollback:
-        'Rollback: discard the disposable workspace for this runId and retain only artifacts. Do not mutate client main.',
+        'Phase 1 rollback: pre-agent git checkpoint taken; on failure restore workspace; on success preserve evidence. See rollback.md.',
       summary: [
         `# Run Summary`,
         '',
@@ -324,6 +324,18 @@ export class PipelineController {
       secretsUsed: false,
       maxIdenticalRetries: this.deps.config.maxIdenticalRetries,
       finishedAt,
+    });
+
+    const rollbackOutcome = applyRollbackPolicy({
+      status,
+      workspaceDir: context.workspaceDir,
+      artifactDir: context.artifactDir,
+      ...(lastOutcome?.diff !== undefined ? { agentDiff: lastOutcome.diff } : {}),
+    });
+    logger.info('rollback policy applied', {
+      action: rollbackOutcome.action,
+      preserved: rollbackOutcome.preserved,
+      workspaceRestored: rollbackOutcome.workspaceRestored,
     });
 
     logger.info('pipeline run finished', {
@@ -372,12 +384,19 @@ export class PipelineController {
       diff: input.lastOutcome?.diff ?? '',
       changeSummary: 'Run stopped before normal completion.',
       rollback:
-        'Rollback: discard the disposable workspace for this runId and retain only artifacts.',
+        'Phase 1 rollback: unrecoverable stop — git diff captured and workspace restored to pre-agent checkpoint when possible.',
       summary: [`# Run Summary`, '', ...input.notes.map((note) => `- ${note}`)].join('\n'),
       networkUsed: false,
       secretsUsed: false,
       maxIdenticalRetries: this.deps.config.maxIdenticalRetries,
       finishedAt: input.finishedAt,
+    });
+
+    applyRollbackPolicy({
+      status: input.status,
+      workspaceDir: input.context.workspaceDir,
+      artifactDir: input.context.artifactDir,
+      ...(input.lastOutcome?.diff !== undefined ? { agentDiff: input.lastOutcome.diff } : {}),
     });
 
     return {

@@ -66,7 +66,7 @@ npm run pipeline -- compile --task tasks/customer-order-demo.yaml --format bundl
 | `databaseChecks` | Fixture or DB state metrics |
 | `evidenceRequirements` | Required artifact files |
 | `cleanup` | Post-run cleanup obligations |
-| `rollback` | How to discard disposable work |
+| `rollback` | Pre-agent git checkpoint; preserve on success; diff + restore on failure |
 | `stopConditions` | Circuit-break / safe-stop rules (maps to `circuitBreakRules`) |
 
 Checked-in example: `tasks/customer-order-demo.technical-task.json` (regenerate via compile).

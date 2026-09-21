@@ -94,12 +94,14 @@ export function compileTechnicalScenario(card: BusinessTaskCard): TechnicalScena
     cleanup: [
       'Stop ephemeral storefront/demo servers started for this run',
       'Remove disposable workspace when cleanupWorkspace=true',
-      'Retain artifacts/<runId>/ for review',
+      'Retain runs/<runId>/ evidence package for review',
       'Docker stack volumes removed only via scripts/cleanup.sh when used',
     ],
     rollback: [
-      'Discard disposable workspace (see rollback.md in the evidence pack)',
-      'Restore workspace-checkpoint/ if a pre-agent snapshot was taken',
+      'Before agent: git checkpoint (+ filesystem workspace-checkpoint/)',
+      'After successful run: commit / preserve changes in evidence (git-diff.patch)',
+      'After unrecoverable failure: capture git diff, then git reset / restore workspace',
+      'See rollback.md and rollback-outcome.json in the evidence pack',
       'Do not roll back production or shared environments (out of scope)',
     ],
     stopConditions: [

@@ -133,7 +133,7 @@ Each run writes under `runs/<runId>/` (default `PIPELINE_ARTIFACTS_DIR=./runs`).
 | `validation.json` | Independent checks (expected vs actual) |
 | `api/` · `graphql/` · `screenshots/` · `playwright/` · `database/` | Typed evidence |
 | `recovery.json` | Retries / circuit break / rollback summary |
-| `rollback.md` | How to discard the disposable workspace |
+| `rollback.md` / `rollback-outcome.json` | Phase 1 preserve-or-restore outcome |
 | `final-report.html` | Answers WHAT WAS REQUESTED? … FINAL RESULT? |
 
 Also present for compatibility: `status.json`, `result.json`, `summary.html`, `evidence-manifest.json`, `validator-verdict.json`, `api-responses/`. Details: [EVIDENCE_PACKAGE.md](./EVIDENCE_PACKAGE.md).
@@ -176,6 +176,7 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 - [AUTONOMOUS_DEBUGGING.md](./AUTONOMOUS_DEBUGGING.md) — deliberate failure → recover → validate  
 - [RETRY_POLICY.md](./RETRY_POLICY.md) — classified retries, MAX_RETRIES=3, circuit break  
 - [EVIDENCE_PACKAGE.md](./EVIDENCE_PACKAGE.md) — runs/<id>/ layout and final-report.html  
+- [ROLLBACK.md](./ROLLBACK.md) — git checkpoint → preserve / restore  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
 - [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  
