@@ -85,7 +85,7 @@ Minimum files commonly required by tasks:
 - `stdout.log`, `stderr.log`
 - `change-summary.md`, `rollback.md`, `summary.md`
 
-Also produced when applicable: `result.json`, `report.json`, `validation.json`, `validation-results.json`, `validator-verdict.json`, `playwright-results.json`, `summary.html`, `evidence-manifest.json`, `diff.patch` / `git.diff`, `screenshots/`, `api-responses/`, `workspace-checkpoint/`.
+Also produced when applicable: `result.json`, `report.json`, `validation.json`, `validation-results.json`, `validator-verdict.json`, `playwright-results.json`, `final-report.html` / `summary.html`, `evidence-manifest.json`, `git-diff.patch` / `git.diff`, `recovery.json`, `scenario.json`, `agent.log`, `api/`, `graphql/`, `screenshots/`, `playwright/`, `database/`, `api-responses/`, `workspace-checkpoint/`. See [EVIDENCE_PACKAGE.md](./EVIDENCE_PACKAGE.md).
 
 Logs and diffs are **redacted** for secret-like patterns before write.
 

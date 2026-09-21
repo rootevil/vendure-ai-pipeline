@@ -13,7 +13,7 @@ Evaluator-facing script. Every command below was executed successfully in a rehe
 | Controlled failure (incomplete starter) | `evaluation-demo/scripts/verify.sh --baseline` |
 | Bounded recovery / autonomous debugging → PASS | `npm run scenario:autonomous-debugging` |
 | Unrecoverable → BLOCK | `npm run scenario:failure-unrecoverable` |
-| Final report | `artifacts/<runId>/report.md` (+ `summary.html`) |
+| Final report | `runs/<runId>/final-report.html` (also `summary.html`) |
 | Cleanup | `./scripts/cleanup.sh` |
 
 ## What this demo does **not** prove

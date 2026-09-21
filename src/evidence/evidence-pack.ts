@@ -9,6 +9,7 @@ import {
 import { basename, join, relative } from 'node:path';
 
 import type {
+  AttemptRecord,
   EvidenceManifest,
   EvidenceManifestEntry,
   RunResult,
@@ -16,6 +17,7 @@ import type {
   TaskDefinition,
   ValidationCheckResult,
 } from '../models/types.js';
+import { MAX_RETRIES } from '../retry/classified-policy.js';
 import { buildValidatorVerdict, writeValidatorVerdict } from '../validator/verdict.js';
 
 export interface FinalizeEvidencePackInput {
@@ -41,22 +43,42 @@ export interface FinalizeEvidencePackInput {
   readonly stderr?: string;
   readonly diff?: string;
   readonly testExitCode?: number | null;
+  /** Optional technical scenario payload (compiler output). */
+  readonly scenario?: unknown;
   readonly now?: () => Date;
 }
 
+const CLIENT_DIRS = [
+  'api',
+  'graphql',
+  'screenshots',
+  'playwright',
+  'database',
+  'api-responses',
+  'validation',
+] as const;
+
 /**
- * Writes the Phase 6 reviewable evidence pack under runs/<runId>/.
- * A reviewer who did not execute the pipeline should understand PASS/BLOCK from these files alone.
+ * Writes the reviewable evidence pack under runs/<runId>/ (or configured artifacts root).
+ * Client delivery layout:
+ *
+ *   task.json, scenario.json, execution.log, agent.log, git-diff.patch,
+ *   validation.json, api/, graphql/, screenshots/, playwright/, database/,
+ *   recovery.json, rollback.md, final-report.html
+ *
+ * Compatibility aliases (result.json, summary.html, git.diff, api-responses/, …) remain.
  */
 export function finalizeEvidencePack(input: FinalizeEvidencePackInput): EvidenceManifest {
   const nowFn = input.now ?? (() => new Date());
   const generatedAt = nowFn().toISOString();
   const runDir = input.runDir;
   mkdirSync(runDir, { recursive: true });
-  mkdirSync(join(runDir, 'screenshots'), { recursive: true });
-  mkdirSync(join(runDir, 'api-responses'), { recursive: true });
+  for (const dir of CLIENT_DIRS) {
+    mkdirSync(join(runDir, dir), { recursive: true });
+  }
 
   writeJson(join(runDir, 'task.json'), input.task);
+  writeScenarioJson(runDir, input);
 
   const resultPayload = {
     runId: input.result.runId,
@@ -99,7 +121,6 @@ export function finalizeEvidencePack(input: FinalizeEvidencePackInput): Evidence
     steps: input.result.validationSteps,
   };
   writeJson(join(runDir, 'validation.json'), validationPayload);
-  // Keep alias used by Phase 5 validators/tests.
   writeJson(join(runDir, 'validation-results.json'), input.result.validationChecks);
 
   const lastClaimed = input.result.attempts.at(-1)?.agentClaimedSuccess ?? false;
@@ -135,12 +156,12 @@ export function finalizeEvidencePack(input: FinalizeEvidencePackInput): Evidence
     '',
   ].join('\n');
   writeText(join(runDir, 'execution.log'), executionLog);
+  writeText(join(runDir, 'agent.log'), buildAgentLog(input.result.attempts, stdout, stderr));
 
   const diff = input.diff ?? readIfExists(join(runDir, 'diff.patch'));
-  writeText(
-    join(runDir, 'git.diff'),
-    diff.length > 0 ? diff : 'No git diff captured for this run.\n',
-  );
+  const diffBody = diff.length > 0 ? diff : 'No git diff captured for this run.\n';
+  writeText(join(runDir, 'git.diff'), diffBody);
+  writeText(join(runDir, 'git-diff.patch'), diffBody);
   if (!existsSync(join(runDir, 'diff.patch'))) {
     writeText(join(runDir, 'diff.patch'), diff);
   }
@@ -159,15 +180,20 @@ export function finalizeEvidencePack(input: FinalizeEvidencePackInput): Evidence
 
   collectApiResponses(runDir, input.result.validationChecks);
   collectScreenshots(runDir);
+  organizeClientEvidenceDirs(runDir, input.result.validationChecks);
 
   const rollback =
     readIfExists(join(runDir, 'rollback.md')) ||
     'Rollback: discard the disposable workspace for this runId and retain only this evidence directory. Do not mutate client main.\n';
   writeText(join(runDir, 'rollback.md'), rollback);
 
-  writeText(join(runDir, 'summary.html'), renderSummaryHtml(input, resultPayload));
+  const recovery = buildRecoveryJson(input, rollback);
+  writeJson(join(runDir, 'recovery.json'), recovery);
 
-  // Compatibility aliases expected by earlier phases / evidence_present defaults.
+  const finalReport = renderFinalReportHtml(input, resultPayload, recovery);
+  writeText(join(runDir, 'final-report.html'), finalReport);
+  writeText(join(runDir, 'summary.html'), finalReport);
+
   writeJson(join(runDir, 'status.json'), {
     status: input.result.status,
     run_id: input.result.runId,
@@ -181,7 +207,7 @@ export function finalizeEvidencePack(input: FinalizeEvidencePackInput): Evidence
         '',
         `- Status: \`${input.result.status}\``,
         `- Run ID: \`${input.result.runId}\``,
-        `- See summary.html and result.json for the full verdict basis.`,
+        `- See final-report.html and result.json for the full verdict basis.`,
         '',
       ].join('\n'),
     );
@@ -197,6 +223,106 @@ export function finalizeEvidencePack(input: FinalizeEvidencePackInput): Evidence
   return manifest;
 }
 
+function writeScenarioJson(runDir: string, input: FinalizeEvidencePackInput): void {
+  if (input.scenario !== undefined) {
+    writeJson(join(runDir, 'scenario.json'), input.scenario);
+    return;
+  }
+  if (existsSync(join(runDir, 'scenario.json'))) {
+    return;
+  }
+  writeJson(join(runDir, 'scenario.json'), {
+    taskId: input.task.id,
+    title: input.task.title,
+    goal: input.task.goal,
+    mode: input.task.mode,
+    acceptanceCriteria: input.task.acceptanceCriteria,
+    stages: input.task.stages,
+    validationSteps: input.task.validationSteps.map((step) => ({
+      id: step.id,
+      type: step.type,
+    })),
+    allowedTools: input.task.allowedTools,
+    timeoutMs: input.task.timeoutMs,
+    retryPolicy: input.task.retryPolicy,
+  });
+}
+
+function buildAgentLog(
+  attempts: readonly AttemptRecord[],
+  stdout: string,
+  stderr: string,
+): string {
+  return [
+    '# Agent log',
+    '',
+    '## Attempt timeline',
+    ...attempts.map(
+      (attempt) =>
+        `- #${attempt.attempt} [${attempt.startedAt} → ${attempt.finishedAt}] ${attempt.failureKind}/${attempt.failureClass} claimedSuccess=${String(attempt.agentClaimedSuccess)} — ${attempt.message}`,
+    ),
+    '',
+    '## Agent stdout',
+    stdout || '(empty)',
+    '',
+    '## Agent stderr',
+    stderr || '(empty)',
+    '',
+  ].join('\n');
+}
+
+function buildRecoveryJson(
+  input: FinalizeEvidencePackInput,
+  rollback: string,
+): {
+  readonly retriesPerformed: boolean;
+  readonly attemptCount: number;
+  readonly maxRetries: number;
+  readonly circuitBreak: boolean;
+  readonly reason: string;
+  readonly rollbackNeeded: boolean;
+  readonly rollback: string;
+  readonly attempts: readonly AttemptRecord[];
+} {
+  const attemptCount = input.result.attempts.length;
+  const retriesPerformed = attemptCount > 1;
+  const circuitBreak =
+    input.result.status === 'BLOCK' &&
+    input.result.attempts.some((a) => a.failureKind === 'repeated');
+  const whyParts: string[] = [];
+  if (!retriesPerformed) {
+    whyParts.push('No retry — single attempt or immediate stop.');
+  } else {
+    whyParts.push(
+      `${attemptCount - 1} retry(ies) within MAX_RETRIES=${MAX_RETRIES} (classified disposition; no unbounded loop).`,
+    );
+  }
+  if (circuitBreak) {
+    whyParts.push('Same failure reached the circuit-break threshold.');
+  }
+  if (input.result.status === 'AUTH_REQUIRED') {
+    whyParts.push('Missing credential — AUTH_REQUIRED (no retry).');
+  }
+  if (input.result.status === 'CLIENT_DECISION') {
+    whyParts.push('Business ambiguity — CLIENT_DECISION (no retry).');
+  }
+  const rollbackNeeded =
+    input.result.changedFiles.length > 0 ||
+    input.result.status === 'BLOCK' ||
+    input.result.status === 'ERROR';
+
+  return {
+    retriesPerformed,
+    attemptCount,
+    maxRetries: MAX_RETRIES,
+    circuitBreak,
+    reason: whyParts.join(' '),
+    rollbackNeeded,
+    rollback: rollback.trim(),
+    attempts: input.result.attempts,
+  };
+}
+
 function collectApiResponses(runDir: string, checks: readonly ValidationCheckResult[]): void {
   const apiDir = join(runDir, 'api-responses');
   mkdirSync(apiDir, { recursive: true });
@@ -205,13 +331,14 @@ function collectApiResponses(runDir: string, checks: readonly ValidationCheckRes
     if (!existsSync(check.evidencePath)) {
       continue;
     }
-    // Copy network-oriented check payloads into api-responses/ when present.
     if (
       name.includes('health') ||
       name.includes('api') ||
       name.includes('gql') ||
       name.includes('http') ||
-      name.includes('graphql')
+      name.includes('graphql') ||
+      name.includes('database') ||
+      name.includes('order')
     ) {
       const target = join(apiDir, `${name}.json`);
       if (!existsSync(target)) {
@@ -240,6 +367,88 @@ function collectScreenshots(runDir: string): void {
   }
 }
 
+/**
+ * Populate client-facing api/, graphql/, playwright/, database/ from validation evidence.
+ */
+function organizeClientEvidenceDirs(
+  runDir: string,
+  checks: readonly ValidationCheckResult[],
+): void {
+  for (const check of checks) {
+    if (!existsSync(check.evidencePath)) {
+      continue;
+    }
+    const name = check.checkName.toLowerCase();
+    let bucket: 'api' | 'graphql' | 'database' | 'playwright' | null = null;
+    if (name.includes('graphql') || name.includes('gql')) {
+      bucket = 'graphql';
+    } else if (name.includes('database') || name.includes('postgres') || name.includes('sql')) {
+      bucket = 'database';
+    } else if (
+      name.includes('playwright') ||
+      name.includes('browser') ||
+      name.includes('journey')
+    ) {
+      bucket = 'playwright';
+    } else if (
+      name.includes('health') ||
+      name.includes('api') ||
+      name.includes('http') ||
+      name.includes('order')
+    ) {
+      bucket = 'api';
+    }
+    if (!bucket) {
+      continue;
+    }
+    const target = join(runDir, bucket, `${check.checkName}.json`);
+    if (!existsSync(target)) {
+      copyFileSync(check.evidencePath, target);
+    }
+  }
+
+  // Playwright results file at run root → playwright/
+  const playwrightRoot = join(runDir, 'playwright-results.json');
+  if (existsSync(playwrightRoot)) {
+    const target = join(runDir, 'playwright', 'playwright-results.json');
+    if (!existsSync(target)) {
+      copyFileSync(playwrightRoot, target);
+    }
+  }
+
+  // Mirror api-responses into typed buckets when not already classified by check name.
+  const apiResponses = join(runDir, 'api-responses');
+  if (existsSync(apiResponses)) {
+    for (const name of readdirSync(apiResponses)) {
+      if (!name.endsWith('.json')) {
+        continue;
+      }
+      const lower = name.toLowerCase();
+      let bucket: 'api' | 'graphql' | 'database' = 'api';
+      if (lower.includes('graphql') || lower.includes('gql')) {
+        bucket = 'graphql';
+      } else if (lower.includes('database') || lower.includes('sql')) {
+        bucket = 'database';
+      }
+      const target = join(runDir, bucket, name);
+      if (!existsSync(target)) {
+        copyFileSync(join(apiResponses, name), target);
+      }
+    }
+  }
+
+  // Ensure each client dir has a README so empty trees are reviewable.
+  for (const dir of ['api', 'graphql', 'playwright', 'database'] as const) {
+    const readme = join(runDir, dir, 'README.md');
+    if (!existsSync(readme) && readdirSync(join(runDir, dir)).length === 0) {
+      writeText(
+        readme,
+        `# ${dir}/\n\nNo ${dir} evidence was produced for this run (checks of this type did not run or left no payload).\n`,
+      );
+    }
+  }
+}
+
 function buildEvidenceManifest(input: {
   readonly runDir: string;
   readonly runId: string;
@@ -249,14 +458,14 @@ function buildEvidenceManifest(input: {
   const catalog: Array<{ path: string; type: EvidenceManifestEntry['type']; description: string }> =
     [
       {
-        path: 'result.json',
-        type: 'result',
-        description: 'Final PASS/BLOCK verdict with notes and failed/passed check summary',
-      },
-      {
         path: 'task.json',
         type: 'task',
         description: 'Exact task definition executed for this run',
+      },
+      {
+        path: 'scenario.json',
+        type: 'other',
+        description: 'Technical scenario / validation plan for this run',
       },
       {
         path: 'execution.log',
@@ -264,9 +473,65 @@ function buildEvidenceManifest(input: {
         description: 'Attempt timeline plus captured stdout/stderr',
       },
       {
+        path: 'agent.log',
+        type: 'log',
+        description: 'Agent attempt timeline and agent stdout/stderr',
+      },
+      {
+        path: 'git-diff.patch',
+        type: 'diff',
+        description: 'Git diff / patch of agent workspace changes (client name)',
+      },
+      {
         path: 'validation.json',
         type: 'validation',
         description: 'Independent validator checks with expected vs actual results',
+      },
+      {
+        path: 'api/',
+        type: 'api_response',
+        description: 'HTTP/REST API evidence payloads',
+      },
+      {
+        path: 'graphql/',
+        type: 'api_response',
+        description: 'GraphQL Shop/Admin API evidence payloads',
+      },
+      {
+        path: 'screenshots/',
+        type: 'screenshot',
+        description: 'Browser validation screenshots',
+      },
+      {
+        path: 'playwright/',
+        type: 'validation',
+        description: 'Playwright journey results and related evidence',
+      },
+      {
+        path: 'database/',
+        type: 'validation',
+        description: 'Controlled database query evidence (expected vs actual)',
+      },
+      {
+        path: 'recovery.json',
+        type: 'other',
+        description: 'Retry / circuit-break / rollback summary for this run',
+      },
+      {
+        path: 'rollback.md',
+        type: 'rollback',
+        description: 'Rollback instructions for discarding the disposable workspace',
+      },
+      {
+        path: 'final-report.html',
+        type: 'summary',
+        description:
+          'Human-readable final report answering what was requested, done, tested, and the result',
+      },
+      {
+        path: 'result.json',
+        type: 'result',
+        description: 'Final PASS/BLOCK verdict with notes and failed/passed check summary',
       },
       {
         path: 'validator-verdict.json',
@@ -275,29 +540,14 @@ function buildEvidenceManifest(input: {
           'Client verdict { status, checks[{name,status}] }; PASS/BLOCK from evidence only',
       },
       {
-        path: 'playwright-results.json',
-        type: 'validation',
-        description: 'Playwright browser journey step results and screenshot list',
-      },
-      {
-        path: 'test-results.json',
-        type: 'test_result',
-        description: 'Acceptance/unit test runner exit code and related check evidence',
+        path: 'summary.html',
+        type: 'summary',
+        description: 'Alias of final-report.html (compatibility)',
       },
       {
         path: 'git.diff',
         type: 'diff',
-        description: 'Git diff / patch of agent workspace changes',
-      },
-      {
-        path: 'summary.html',
-        type: 'summary',
-        description: 'Human-readable HTML explanation of why the run PASSED or BLOCKed',
-      },
-      {
-        path: 'rollback.md',
-        type: 'rollback',
-        description: 'Rollback instructions for discarding the disposable workspace',
+        description: 'Alias of git-diff.patch (compatibility)',
       },
       {
         path: 'evidence-manifest.json',
@@ -305,14 +555,9 @@ function buildEvidenceManifest(input: {
         description: 'Catalog of evidence files with types and descriptions',
       },
       {
-        path: 'screenshots/',
-        type: 'screenshot',
-        description: 'Browser validation screenshots (when Playwright checks ran)',
-      },
-      {
         path: 'api-responses/',
         type: 'api_response',
-        description: 'Captured HTTP/GraphQL/health response payloads from independent checks',
+        description: 'Compatibility mirror of network check payloads',
       },
     ];
 
@@ -326,24 +571,36 @@ function buildEvidenceManifest(input: {
         : existsSync(join(input.runDir, item.path.replace(/\/$/, ''))),
   }));
 
-  // Include any extra files present in screenshots/ and api-responses/
-  for (const dirName of ['screenshots', 'api-responses'] as const) {
+  for (const dirName of [
+    'screenshots',
+    'api-responses',
+    'api',
+    'graphql',
+    'playwright',
+    'database',
+  ] as const) {
     const dir = join(input.runDir, dirName);
     if (!existsSync(dir)) {
       continue;
     }
     for (const name of readdirSync(dir)) {
+      if (name === 'README.md') {
+        continue;
+      }
       const rel = `${dirName}/${name}`;
       if (entries.some((entry) => entry.path === rel)) {
         continue;
       }
+      const type: EvidenceManifestEntry['type'] =
+        dirName === 'screenshots'
+          ? 'screenshot'
+          : dirName === 'database' || dirName === 'playwright'
+            ? 'validation'
+            : 'api_response';
       entries.push({
         path: rel,
-        type: dirName === 'screenshots' ? 'screenshot' : 'api_response',
-        description:
-          dirName === 'screenshots'
-            ? `Screenshot artifact ${name}`
-            : `API/response artifact ${name}`,
+        type,
+        description: `Evidence artifact ${name}`,
         present: true,
       });
     }
@@ -358,7 +615,7 @@ function buildEvidenceManifest(input: {
   };
 }
 
-function renderSummaryHtml(
+function renderFinalReportHtml(
   input: FinalizeEvidencePackInput,
   resultPayload: {
     readonly status: RunStatus;
@@ -372,7 +629,59 @@ function renderSummaryHtml(
     readonly passedChecks: readonly string[];
     readonly validatorNotes: readonly string[];
   },
+  recovery: {
+    readonly retriesPerformed: boolean;
+    readonly attemptCount: number;
+    readonly maxRetries: number;
+    readonly circuitBreak: boolean;
+    readonly reason: string;
+    readonly rollbackNeeded: boolean;
+    readonly rollback: string;
+  },
 ): string {
+  const task = input.task;
+  const statusClass = input.result.status === 'PASS' ? 'pass' : 'block';
+  const agentSummaryText = input.result.agentSummary ?? '';
+  const whatAgentDid =
+    agentSummaryText.trim().length > 0
+      ? agentSummaryText
+      : input.result.attempts.length === 0
+        ? 'No agent attempt was recorded.'
+        : input.result.attempts
+            .map(
+              (a) =>
+                `Attempt #${a.attempt}: ${a.message} (claimedSuccess=${String(a.agentClaimedSuccess)}, ${a.failureKind})`,
+            )
+            .join('\n');
+
+  const whatChanged =
+    input.result.changedFiles.length > 0
+      ? input.result.changedFiles.map((f) => `- ${f}`).join('\n')
+      : 'No files changed by the agent.';
+
+  const whatTested =
+    input.result.validationChecks.length > 0
+      ? input.result.validationChecks
+          .map((c) => `- ${c.checkName} → ${c.status} (expected: ${c.expected}; actual: ${c.actual})`)
+          .join('\n')
+      : 'No independent validation checks were recorded.';
+
+  const whatPassed =
+    resultPayload.passedChecks.length > 0
+      ? resultPayload.passedChecks.map((n) => `- ${n}`).join('\n')
+      : '(none)';
+
+  const whatFailed =
+    resultPayload.failedChecks.length > 0
+      ? resultPayload.failedChecks
+          .map((c) => `- ${c.checkName} [${c.status}]: expected ${c.expected}; actual ${c.actual}`)
+          .join('\n')
+      : '(none)';
+
+  const retryAnswer = recovery.retriesPerformed
+    ? `Yes — ${recovery.attemptCount} attempt(s) (MAX_RETRIES=${recovery.maxRetries}).${recovery.circuitBreak ? ' Circuit break opened.' : ''}`
+    : 'No — a single attempt, or an immediate non-retryable stop.';
+
   const failedRows =
     resultPayload.failedChecks.length > 0
       ? resultPayload.failedChecks
@@ -387,60 +696,89 @@ function renderSummaryHtml(
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Pipeline evidence ${escapeHtml(input.result.runId)}</title>
+  <title>Final report — ${escapeHtml(input.result.runId)}</title>
   <style>
-    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 2rem; color: #111; }
+    body { font-family: ui-sans-serif, system-ui, sans-serif; margin: 2rem; color: #111; max-width: 52rem; line-height: 1.45; }
     h1 { margin-bottom: 0.25rem; }
+    h2 { margin-top: 1.75rem; border-bottom: 1px solid #ddd; padding-bottom: 0.25rem; }
     .status { font-size: 1.25rem; font-weight: 700; }
     .pass { color: #0a7a32; }
     .block { color: #b00020; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    pre { background: #f6f6f6; padding: 0.75rem 1rem; overflow-x: auto; white-space: pre-wrap; }
+    table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; }
     th, td { border: 1px solid #ccc; padding: 0.5rem; text-align: left; vertical-align: top; }
     code { background: #f4f4f4; padding: 0.1rem 0.3rem; }
     ul { padding-left: 1.25rem; }
   </style>
 </head>
 <body>
-  <h1>Pipeline run evidence</h1>
-  <p class="status ${input.result.status === 'PASS' ? 'pass' : 'block'}">Status: ${escapeHtml(input.result.status)}</p>
-  <p>Run ID: <code>${escapeHtml(input.result.runId)}</code></p>
-  <p>Task: <code>${escapeHtml(input.result.taskId)}</code> · Mode: <code>${escapeHtml(input.result.mode)}</code></p>
+  <h1>Pipeline final report</h1>
+  <p class="status ${statusClass}">FINAL RESULT: ${escapeHtml(input.result.status)}</p>
+  <p>Run ID: <code>${escapeHtml(input.result.runId)}</code> · Task: <code>${escapeHtml(input.result.taskId)}</code> · Mode: <code>${escapeHtml(input.result.mode)}</code></p>
   <p>Started: ${escapeHtml(input.result.startedAt)} · Finished: ${escapeHtml(input.result.finishedAt)}</p>
-  <h2>Why this result</h2>
-  <p>${escapeHtml(resultPayload.verdictBasis)}</p>
-  <p>Agent claimed success is never used to grant PASS. Open <code>result.json</code> and <code>validation.json</code> for machine-readable detail.</p>
-  <h2>Failed checks</h2>
+
+  <h2>WHAT WAS REQUESTED?</h2>
+  <p><strong>${escapeHtml(task.title)}</strong></p>
+  <pre>${escapeHtml(task.goal)}</pre>
+  <p>Acceptance criteria:</p>
+  <ul>
+    ${task.acceptanceCriteria.map((c) => `<li>${escapeHtml(c)}</li>`).join('\n    ')}
+  </ul>
+
+  <h2>WHAT DID THE AGENT DO?</h2>
+  <pre>${escapeHtml(whatAgentDid)}</pre>
+  <p>Agent claimed success is <strong>never</strong> used to grant PASS. See <code>agent.log</code>.</p>
+
+  <h2>WHAT CHANGED?</h2>
+  <pre>${escapeHtml(whatChanged)}</pre>
+  <p>Full patch: <code>git-diff.patch</code></p>
+
+  <h2>WHAT WAS TESTED?</h2>
+  <pre>${escapeHtml(whatTested)}</pre>
+  <p>Machine detail: <code>validation.json</code>, plus <code>api/</code>, <code>graphql/</code>, <code>playwright/</code>, <code>database/</code>, <code>screenshots/</code> when applicable.</p>
+
+  <h2>WHAT ACTUALLY PASSED?</h2>
+  <pre>${escapeHtml(whatPassed)}</pre>
+
+  <h2>WHAT FAILED?</h2>
+  <pre>${escapeHtml(whatFailed)}</pre>
   <table>
     <thead><tr><th>Check</th><th>Status</th><th>Expected</th><th>Actual</th></tr></thead>
     <tbody>
 ${failedRows}
     </tbody>
   </table>
-  <h2>Passed checks</h2>
+
+  <h2>WAS ANY RETRY PERFORMED?</h2>
+  <p>${escapeHtml(retryAnswer)}</p>
+
+  <h2>WHY?</h2>
+  <p>${escapeHtml(recovery.reason)}</p>
+  <p>${escapeHtml(resultPayload.verdictBasis)}</p>
+  ${
+    resultPayload.validatorNotes.length > 0
+      ? `<ul>${resultPayload.validatorNotes.map((n) => `<li>${escapeHtml(n)}</li>`).join('')}</ul>`
+      : ''
+  }
+  <p>See <code>recovery.json</code> and <code>execution.log</code>.</p>
+
+  <h2>WAS ROLLBACK NEEDED?</h2>
+  <p>${recovery.rollbackNeeded ? 'Yes — discard the disposable workspace; keep this evidence directory.' : 'No workspace mutation requiring rollback beyond normal disposable cleanup.'}</p>
+  <pre>${escapeHtml(recovery.rollback)}</pre>
+
+  <h2>FINAL RESULT?</h2>
+  <p class="status ${statusClass}">${escapeHtml(input.result.status)}</p>
+  <p>Exit code: <code>${String(input.result.exitCode)}</code>. Authority is the independent validator and this evidence package — not the agent self-report.</p>
+
+  <h2>Evidence tree</h2>
   <ul>
-    ${
-      resultPayload.passedChecks.length > 0
-        ? resultPayload.passedChecks
-            .map((name) => `<li><code>${escapeHtml(name)}</code></li>`)
-            .join('\n    ')
-        : '<li>(none)</li>'
-    }
-  </ul>
-  <h2>Validator notes</h2>
-  <ul>
-    ${
-      resultPayload.validatorNotes.length > 0
-        ? resultPayload.validatorNotes.map((note) => `<li>${escapeHtml(note)}</li>`).join('\n    ')
-        : '<li>(none)</li>'
-    }
-  </ul>
-  <h2>Where to look next</h2>
-  <ul>
-    <li><code>evidence-manifest.json</code> — catalog of all evidence files</li>
-    <li><code>execution.log</code> — attempt timeline and logs</li>
-    <li><code>git.diff</code> — workspace changes</li>
-    <li><code>api-responses/</code> and <code>screenshots/</code> — network/browser artifacts when applicable</li>
-    <li><code>rollback.md</code> — how to discard this run safely</li>
+    <li><code>task.json</code> / <code>scenario.json</code></li>
+    <li><code>execution.log</code> / <code>agent.log</code></li>
+    <li><code>git-diff.patch</code></li>
+    <li><code>validation.json</code></li>
+    <li><code>api/</code> · <code>graphql/</code> · <code>screenshots/</code> · <code>playwright/</code> · <code>database/</code></li>
+    <li><code>recovery.json</code> · <code>rollback.md</code></li>
+    <li><code>final-report.html</code> (this file)</li>
   </ul>
 </body>
 </html>

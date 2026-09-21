@@ -25,7 +25,7 @@ Default layout (matches client isolation intent):
 
 ```text
 ./workspace/runs/<run-id>/     # agent cwd + allowlisted writes
-./artifacts/<run-id>/          # evidence pack
+./runs/<run-id>/               # evidence pack (client layout)
 ```
 
 Configured by `PIPELINE_WORKSPACE_DIR` (default `./workspace/runs`). Each run gets `resolve(PIPELINE_WORKSPACE_DIR, runId)`.

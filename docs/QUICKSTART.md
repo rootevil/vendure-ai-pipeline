@@ -36,7 +36,7 @@ Useful defaults:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `PIPELINE_AGENT_MODE` | `mock` | No LLM required |
-| `PIPELINE_ARTIFACTS_DIR` | `./artifacts` | Evidence root |
+| `PIPELINE_ARTIFACTS_DIR` | `./runs` | Evidence root (`runs/<runId>/`) |
 | `PIPELINE_ALLOW_NETWORK` | `false` | Validator HTTP denied unless scenario enables loopback |
 | `PIPELINE_WRITE_ALLOWLIST` | `src,app,evaluation-demo/app` | Host config allowlist (tasks also declare their own) |
 
@@ -121,26 +121,27 @@ See [FAILURE_DEMO.md](./FAILURE_DEMO.md).
 
 ## 6. Inspect evidence
 
-Each run writes under `artifacts/<runId>/` (or a temp directory printed in JSON). Typical files:
+Each run writes under `runs/<runId>/` (default `PIPELINE_ARTIFACTS_DIR=./runs`). Typical client layout:
 
-| File | Purpose |
+| File / dir | Purpose |
 | --- | --- |
-| `status.json` | Machine status (`PASS` / `BLOCK` / …) |
-| `run-manifest.json` | Run metadata |
-| `result.json` / `report.json` | Validator-oriented result / execution report |
-| `validation.json` / `validation-results.json` | Per-check expected vs actual |
-| `validator-verdict.json` | Client verdict: `{ status, checks[{name,status}] }` (evidence-only) |
-| `stdout.log` / `stderr.log` | Redacted agent/process logs |
-| `change-summary.md` / `diff.patch` | Change summary |
+| `task.json` | Exact task executed |
+| `scenario.json` | Technical scenario / validation plan |
+| `execution.log` | Attempt timeline + stdout/stderr |
+| `agent.log` | Agent attempt log |
+| `git-diff.patch` | Workspace patch |
+| `validation.json` | Independent checks (expected vs actual) |
+| `api/` · `graphql/` · `screenshots/` · `playwright/` · `database/` | Typed evidence |
+| `recovery.json` | Retries / circuit break / rollback summary |
 | `rollback.md` | How to discard the disposable workspace |
-| `summary.html` | Human-readable summary |
-| `evidence-manifest.json` | Catalog of evidence files |
-| `workspace-checkpoint/` | Pre-agent filesystem snapshot (when created) |
+| `final-report.html` | Answers WHAT WAS REQUESTED? … FINAL RESULT? |
+
+Also present for compatibility: `status.json`, `result.json`, `summary.html`, `evidence-manifest.json`, `validator-verdict.json`, `api-responses/`. Details: [EVIDENCE_PACKAGE.md](./EVIDENCE_PACKAGE.md).
 
 Re-validate artifacts only (ignores agent prose; requires check JSON for `PASS`):
 
 ```bash
-node packages/validator/bin/validate.mjs --run-dir artifacts/<run_id>
+node packages/validator/bin/validate.mjs --run-dir runs/<run_id>
 ```
 
 ## 7. Understand PASS / BLOCK
@@ -174,6 +175,7 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 - [DATABASE_VALIDATION.md](./DATABASE_VALIDATION.md) — controlled order SQL expected vs actual  
 - [AUTONOMOUS_DEBUGGING.md](./AUTONOMOUS_DEBUGGING.md) — deliberate failure → recover → validate  
 - [RETRY_POLICY.md](./RETRY_POLICY.md) — classified retries, MAX_RETRIES=3, circuit break  
+- [EVIDENCE_PACKAGE.md](./EVIDENCE_PACKAGE.md) — runs/<id>/ layout and final-report.html  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
 - [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  

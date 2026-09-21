@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 
 import type { Logger } from '../logging/logger.js';
@@ -54,11 +54,37 @@ const PRODUCTION_PATTERNS: readonly RegExp[] = [
   /\blive[_-]?stripe\b/i,
 ];
 
-export function createRunId(now: Date = new Date()): string {
-  return now
-    .toISOString()
-    .replace(/[-:]/g, '')
-    .replace(/\.\d{3}Z$/, 'Z');
+/**
+ * Client-style run ids: `YYYY-MM-DD-NNN` (e.g. `2026-09-21-001`).
+ * When `artifactsRoot` is provided, NNN is the next free sequence for that day.
+ */
+export function createRunId(now: Date = new Date(), artifactsRoot?: string): string {
+  const day = now.toISOString().slice(0, 10);
+  let seq = 1;
+  if (artifactsRoot) {
+    try {
+      mkdirSync(artifactsRoot, { recursive: true });
+      if (existsSync(artifactsRoot)) {
+        const prefix = `${day}-`;
+        for (const name of readdirSync(artifactsRoot)) {
+          if (!name.startsWith(prefix)) {
+            continue;
+          }
+          const match = /^(\d{4}-\d{2}-\d{2})-(\d+)$/.exec(name);
+          if (!match) {
+            continue;
+          }
+          const n = Number.parseInt(match[2] ?? '', 10);
+          if (Number.isFinite(n) && n >= seq) {
+            seq = n + 1;
+          }
+        }
+      }
+    } catch {
+      // Keep seq = 1 if the artifacts root cannot be listed.
+    }
+  }
+  return `${day}-${String(seq).padStart(3, '0')}`;
 }
 
 export function createExecutionContext(input: {
@@ -71,7 +97,8 @@ export function createExecutionContext(input: {
 }): ExecutionContext {
   const kernel = input.safetyKernel ?? defaultSafetyKernel;
   const now = input.now ?? new Date();
-  const runId = input.runId ?? input.config.runId ?? createRunId(now);
+  const runId =
+    input.runId ?? input.config.runId ?? createRunId(now, input.config.artifactsDir);
 
   kernel.assertRetryBudgets(input.config.maxIdenticalRetries, input.config.maxTotalAttempts);
   kernel.assertActionAllowed('write_source');

@@ -27,16 +27,24 @@ export interface EvidenceCollector {
 
 /**
  * Writes the early/mid-run evidence under runs/<runId>/.
- * Final Phase 6 pack (result.json, summary.html, evidence-manifest.json, …)
+ * Final client pack (final-report.html, recovery.json, api/, graphql/, …)
  * is completed by finalizeEvidencePack after independent validation.
  */
 export class FileEvidenceCollector implements EvidenceCollector {
   async writeBundle(input: EvidenceBundleInput): Promise<readonly string[]> {
     const dir = input.context.artifactDir;
     mkdirSync(dir, { recursive: true });
-    mkdirSync(join(dir, 'screenshots'), { recursive: true });
-    mkdirSync(join(dir, 'api-responses'), { recursive: true });
-    mkdirSync(join(dir, 'validation'), { recursive: true });
+    for (const name of [
+      'screenshots',
+      'api-responses',
+      'validation',
+      'api',
+      'graphql',
+      'playwright',
+      'database',
+    ]) {
+      mkdirSync(join(dir, name), { recursive: true });
+    }
 
     const stdout = truncateAndRedactLog(input.stdout);
     const stderr = truncateAndRedactLog(input.stderr);
@@ -77,6 +85,26 @@ export class FileEvidenceCollector implements EvidenceCollector {
       '',
     ].join('\n');
 
+    const diffBody = ensureTrailingNewline(
+      diff.length > 0 ? diff : 'No git diff captured for this run.',
+    );
+    const agentLog = [
+      '# Agent log',
+      '',
+      '## Attempt timeline',
+      ...input.attempts.map(
+        (attempt) =>
+          `- #${attempt.attempt} ${attempt.failureKind}/${attempt.failureClass} claimedSuccess=${String(attempt.agentClaimedSuccess)} — ${redactSecrets(attempt.message)}`,
+      ),
+      '',
+      '## Agent stdout',
+      stdout || '(empty)',
+      '',
+      '## Agent stderr',
+      stderr || '(empty)',
+      '',
+    ].join('\n');
+
     const files: Array<[string, string]> = [
       ['run-manifest.json', `${JSON.stringify(manifest, null, 2)}\n`],
       [
@@ -87,11 +115,10 @@ export class FileEvidenceCollector implements EvidenceCollector {
       ['stdout.log', stdout],
       ['stderr.log', stderr],
       ['execution.log', ensureTrailingNewline(executionLog)],
+      ['agent.log', ensureTrailingNewline(agentLog)],
       ['diff.patch', diff],
-      [
-        'git.diff',
-        ensureTrailingNewline(diff.length > 0 ? diff : 'No git diff captured for this run.'),
-      ],
+      ['git.diff', diffBody],
+      ['git-diff.patch', diffBody],
       ['change-summary.md', ensureTrailingNewline(redactSecrets(input.changeSummary))],
       ['rollback.md', ensureTrailingNewline(input.rollback)],
       ['summary.md', ensureTrailingNewline(redactSecrets(input.summary))],

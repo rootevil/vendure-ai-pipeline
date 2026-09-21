@@ -185,7 +185,7 @@ vendure-ai-pipeline/
 | `src/validators/*` | `src/validator/*` + `checks/*` |
 | `src/execution/sandbox.ts` | `src/safety/execution-context.ts` |
 | `src/cli/run.ts` | `src/cli/index.ts` |
-| Evidence root `runs/` | Prefer `PIPELINE_ARTIFACTS_DIR=./artifacts` (compatible fields) |
+| Evidence root `runs/` | Default `PIPELINE_ARTIFACTS_DIR=./runs`; see [EVIDENCE_PACKAGE.md](./EVIDENCE_PACKAGE.md) |
 
 ## 3. Isolation model (as-built)
 
