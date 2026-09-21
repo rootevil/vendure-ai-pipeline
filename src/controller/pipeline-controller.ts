@@ -4,6 +4,7 @@ import type { EvidenceCollector } from '../evidence/evidence-collector.js';
 import type { Logger } from '../logging/logger.js';
 import type { AttemptRecord, RunResult, TaskDefinition } from '../models/types.js';
 import { classifyFailure } from '../retry/failure-classifier.js';
+import { classifyRetryCategory } from '../retry/classified-policy.js';
 import { buildFailureSignature, RetryPolicy } from '../retry/retry-policy.js';
 import {
   createExecutionContext,
@@ -53,6 +54,8 @@ export class PipelineController {
     let lastOutcome: AgentRunOutcome | null = null;
     let stopReason: string | null = null;
     let authRequired = false;
+    let clientDecision = false;
+    let hardStop: 'BLOCK' | 'CIRCUIT_BREAK' | null = null;
 
     createWorkspaceCheckpoint({
       workspaceDir: context.workspaceDir,
@@ -173,15 +176,41 @@ export class PipelineController {
         break;
       }
 
-      const decision = retryPolicy.decide({ signature, failureKind });
+      const decision = retryPolicy.decide({
+        signature,
+        failureKind,
+        failureClass: outcome.failureClass,
+        ...(outcome.failureCode !== undefined ? { failureCode: outcome.failureCode } : {}),
+        message: outcome.summary || outcome.stderr || 'agent-failure',
+        category: classifyRetryCategory({
+          failureClass: outcome.failureClass,
+          ...(outcome.failureCode !== undefined ? { failureCode: outcome.failureCode } : {}),
+          message: outcome.summary || outcome.stderr || '',
+        }),
+      });
       logger.info('retry decision', {
         shouldRetry: decision.shouldRetry,
         reason: decision.reason,
         failureKind: decision.failureKind,
         circuitState: decision.circuitState,
         action: decision.action,
+        disposition: decision.disposition,
+        category: decision.category,
         attempt: attempts.length,
       });
+
+      if (decision.disposition === 'AUTH_REQUIRED') {
+        authRequired = true;
+      }
+      if (decision.disposition === 'CLIENT_DECISION') {
+        clientDecision = true;
+      }
+      if (decision.disposition === 'BLOCK') {
+        hardStop = 'BLOCK';
+      }
+      if (decision.disposition === 'CIRCUIT_BREAK') {
+        hardStop = 'CIRCUIT_BREAK';
+      }
 
       if (!decision.shouldRetry) {
         // Mark the terminal attempt kind as repeated when the budget tripped.
@@ -203,7 +232,11 @@ export class PipelineController {
       testExitCode = await this.deps.runTests(context);
     }
 
-    const provisionalStatus = authRequired ? 'AUTH_REQUIRED' : 'BLOCK';
+    const provisionalStatus = authRequired
+      ? 'AUTH_REQUIRED'
+      : clientDecision
+        ? 'CLIENT_DECISION'
+        : 'BLOCK';
     const presentEvidence = await this.deps.evidence.writeBundle({
       context,
       status: provisionalStatus,
@@ -249,8 +282,19 @@ export class PipelineController {
       retryPolicy.recordValidationFailure(decision.notes.join('; ') || 'validator BLOCK');
     }
 
-    const status = authRequired ? 'AUTH_REQUIRED' : decision.status;
-    const exitCode = authRequired ? 2 : decision.exitCode;
+    const status = authRequired
+      ? 'AUTH_REQUIRED'
+      : clientDecision
+        ? 'CLIENT_DECISION'
+        : hardStop === 'BLOCK' || hardStop === 'CIRCUIT_BREAK'
+          ? 'BLOCK'
+          : decision.status;
+    const exitCode =
+      status === 'PASS' || status === 'BASELINE_BLOCKED_EXPECTED'
+        ? 0
+        : status === 'AUTH_REQUIRED'
+          ? 2
+          : 1;
 
     await this.deps.evidence.writeBundle({
       context,

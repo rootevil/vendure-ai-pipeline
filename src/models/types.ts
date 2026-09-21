@@ -8,6 +8,7 @@ export const RunStatusSchema = z.enum([
   'BLOCK',
   'BASELINE_BLOCKED_EXPECTED',
   'AUTH_REQUIRED',
+  'CLIENT_DECISION',
   'ERROR',
 ]);
 export type RunStatus = z.infer<typeof RunStatusSchema>;

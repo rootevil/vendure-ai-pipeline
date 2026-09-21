@@ -150,7 +150,8 @@ node packages/validator/bin/validate.mjs --run-dir artifacts/<run_id>
 | `PASS` | Independent checks + required evidence succeeded | 0 |
 | `BLOCK` | Checks failed, evidence missing, or unsafe stop | 1 |
 | `BASELINE_BLOCKED_EXPECTED` | Baseline mode correctly observed failing acceptance | 0 |
-| `AUTH_REQUIRED` | Agent/control plane reported auth gap | 1 |
+| `AUTH_REQUIRED` | Missing credential — stop, do not retry | 2 |
+| `CLIENT_DECISION` | Business ambiguity — stop for the client | 1 |
 
 **The agent never decides PASS.** Agent `claimedSuccess` is recorded and ignored for the verdict. Details: [VALIDATION.md](./VALIDATION.md).
 
@@ -172,6 +173,7 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 - [GRAPHQL_API_VALIDATION.md](./GRAPHQL_API_VALIDATION.md) — independent Shop API evidence after browser  
 - [DATABASE_VALIDATION.md](./DATABASE_VALIDATION.md) — controlled order SQL expected vs actual  
 - [AUTONOMOUS_DEBUGGING.md](./AUTONOMOUS_DEBUGGING.md) — deliberate failure → recover → validate  
+- [RETRY_POLICY.md](./RETRY_POLICY.md) — classified retries, MAX_RETRIES=3, circuit break  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
 - [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  

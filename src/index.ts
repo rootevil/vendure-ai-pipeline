@@ -60,7 +60,16 @@ export {
   type AllowedAgentAction,
 } from './safety/policy.js';
 export { GuardingProcessRunner } from './safety/command-guard.js';
-export { RetryPolicy, buildFailureSignature, type RetryDecision } from './retry/retry-policy.js';
+export { RetryPolicy, buildFailureSignature, MAX_RETRIES, type RetryDecision } from './retry/retry-policy.js';
+export {
+  classifyRetryCategory,
+  CLASSIFIED_RETRY_TABLE,
+  ruleForCategory,
+  MAX_RETRIES as CLASSIFIED_MAX_RETRIES,
+  type RetryCategory,
+  type RetryDisposition,
+  type ClassifiedRetryRule,
+} from './retry/classified-policy.js';
 export {
   classifyFailure,
   failureKindToLegacyClass,

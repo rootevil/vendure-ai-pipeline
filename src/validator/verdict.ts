@@ -16,7 +16,7 @@ export interface ValidatorVerdictCheck {
 }
 
 export interface ValidatorVerdict {
-  readonly status: 'PASS' | 'BLOCK' | 'BASELINE_BLOCKED_EXPECTED' | 'AUTH_REQUIRED';
+  readonly status: 'PASS' | 'BLOCK' | 'BASELINE_BLOCKED_EXPECTED' | 'AUTH_REQUIRED' | 'CLIENT_DECISION';
   readonly checks: readonly ValidatorVerdictCheck[];
   /** Always true when the agent claimed success — recorded for audit, never used to grant PASS. */
   readonly agentClaimIgnored: boolean;
@@ -34,7 +34,8 @@ export function buildValidatorVerdict(input: {
     input.status === 'PASS' ||
     input.status === 'BLOCK' ||
     input.status === 'BASELINE_BLOCKED_EXPECTED' ||
-    input.status === 'AUTH_REQUIRED'
+    input.status === 'AUTH_REQUIRED' ||
+    input.status === 'CLIENT_DECISION'
       ? input.status
       : 'BLOCK';
 

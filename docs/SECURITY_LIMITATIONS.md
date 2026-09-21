@@ -13,7 +13,7 @@ items below are deferred, environmental, or intentionally soft for the public de
 | Stack deps | Redis/Postgres hosts limited to `PIPELINE_STACK_HOST_ALLOWLIST` |
 | Agent env | Secret-like env keys stripped before OpenHands spawn |
 | Logs / evidence | Secret redaction + stdout/stderr size caps |
-| Retries | Identical / total / timeout budgets with circuit breaker (unchanged, already bounded) |
+| Retries | Classified actions with `MAX_RETRIES = 3` and a fail-closed circuit breaker. No unbounded `while (failure) retry()` loop. |
 | Timeouts | Agent and process runner kill on timeout; HTTP/browser steps have `timeoutMs` |
 | Resources | Compose CPU/mem/PID limits; process output hard cap (~4MB) then SIGKILL |
 | Cleanup / restore | Checkpoint restore only under workspace / temp / `PIPELINE_WORKSPACE_DIR` |

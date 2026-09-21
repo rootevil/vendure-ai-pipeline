@@ -52,7 +52,8 @@ If any critical assertion fails, overall `status` is `BLOCK` regardless of the a
 | `PASS` | Required evidence present and independent checks succeeded | 0 |
 | `BLOCK` | Failed/missing checks, unsafe stop, or exhausted retries | 1 |
 | `BASELINE_BLOCKED_EXPECTED` | Baseline mode correctly saw failing acceptance | 0 |
-| `AUTH_REQUIRED` | Auth/identity gap reported | 1 |
+| `AUTH_REQUIRED` | Missing credential — stop, do not retry | 2 |
+| `CLIENT_DECISION` | Business ambiguity — stop for the client | 1 |
 
 Evaluation-demo verifier (`evaluation-demo/scripts/verify.mjs`) uses the same status strings for the public mini-demo.
 

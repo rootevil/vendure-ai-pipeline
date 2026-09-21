@@ -118,7 +118,13 @@ export function validateRunDir(input: ValidateRunDirInput): ValidateRunDirResult
 }
 
 function normalizeStatus(value: unknown): RunStatus | null {
-  if (value === 'PASS' || value === 'BLOCK' || value === 'BASELINE_BLOCKED_EXPECTED' || value === 'AUTH_REQUIRED') {
+  if (
+    value === 'PASS' ||
+    value === 'BLOCK' ||
+    value === 'BASELINE_BLOCKED_EXPECTED' ||
+    value === 'AUTH_REQUIRED' ||
+    value === 'CLIENT_DECISION'
+  ) {
     return value;
   }
   return null;

@@ -201,7 +201,7 @@ Not `network_mode: none`. Details: [DOCKER_SETUP.md](./DOCKER_SETUP.md), [SECURI
 
 - Validator ignores agent `claimedSuccess`.
 - Check types: evidence, workspace/files, health, HTTP, GraphQL, browser, database/json_fixture, path_invariant, redis/postgres probes.
-- Recovery: failure classifier + retry budgets + circuit breaker; unsafe/secret patterns → safe-stop `BLOCK`.
+- Recovery: classified retry policy (`MAX_RETRIES = 3`) + circuit breaker. Same failure three times → `CIRCUIT_BREAK`. Production, dangerous ops, missing credentials, and business ambiguity do not retry. See [RETRY_POLICY.md](./RETRY_POLICY.md).
 - Modes: `acceptance`, `baseline` (`BASELINE_BLOCKED_EXPECTED`), `full` (reserved).
 
 ## 5. Smoke path
