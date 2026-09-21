@@ -12,6 +12,8 @@ Honest non-claims for operators and reviewers. Security-specific residuals: [SEC
 | Buzz multi-role permanent agents | **Not** implemented |
 | Production deploy / private client repos | **Out of scope** |
 | Unrestricted minipc / SSH | **Out of scope** |
+| Formal load test (Artillery, k6) | **Interface only** — `NOT_RUN`, not acceptance |
+| Formal red-team (Semgrep, Trivy, CodeQL, sqlmap) | **Interface only** — `NOT_RUN`, not acceptance |
 
 ## Runtime / agents
 

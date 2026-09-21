@@ -215,6 +215,25 @@ export {
 } from './validator/controlled-sql.js';
 export { validateRunDir, type ValidateRunDirResult } from './validator/validate-run-dir.js';
 export {
+  LOAD_TEST_TOOLS,
+  UnconfiguredLoadTestAdapter,
+  type LoadTestAdapter,
+  type LoadTestRequest,
+  type LoadTestResult,
+} from './validators/load/load-test-adapter.js';
+export {
+  RED_TEAM_TOOLS,
+  UnconfiguredRedTeamAdapter,
+  type RedTeamAdapter,
+  type RedTeamRequest,
+  type RedTeamResult,
+} from './validators/security/red-team-adapter.js';
+export {
+  runExtendedValidation,
+  type ExtendedValidationInput,
+  type ExtendedValidationReport,
+} from './validators/extended-validation.js';
+export {
   createWorkspaceCheckpoint,
   restoreWorkspaceCheckpoint,
   type CheckpointMeta,

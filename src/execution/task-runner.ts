@@ -13,6 +13,9 @@ import { createExecutionContext, type ExecutionContext } from '../safety/executi
 import { assertTaskSafe } from '../task/task-safety.js';
 import type { BrowserLauncher, DatabaseExecutor, HttpFetcher } from '../validator/check-types.js';
 import { IndependentValidator } from '../validator/independent-validator.js';
+import type { LoadTestAdapter } from '../validators/load/load-test-adapter.js';
+import type { RedTeamAdapter } from '../validators/security/red-team-adapter.js';
+import { runExtendedValidation } from '../validators/extended-validation.js';
 import { writeExecutionReport } from './report.js';
 
 const FLOW_STEPS = [
@@ -21,6 +24,8 @@ const FLOW_STEPS = [
   'execute agent',
   'collect changes',
   'run validators',
+  'load test',
+  'security red-team',
   'collect evidence',
   'determine PASS/BLOCK',
   'cleanup',
@@ -36,6 +41,8 @@ export interface TaskRunnerDependencies {
   readonly fetchHttp?: HttpFetcher;
   readonly executeDatabase?: DatabaseExecutor;
   readonly launchBrowser?: BrowserLauncher;
+  readonly loadTest?: LoadTestAdapter;
+  readonly redTeam?: RedTeamAdapter;
 }
 
 /**
@@ -80,7 +87,7 @@ export class TaskRunner {
       ...(this.deps.runTests !== undefined ? { runTests: this.deps.runTests } : {}),
     });
 
-    flow.push(FLOW_STEPS[1], FLOW_STEPS[2], FLOW_STEPS[3], FLOW_STEPS[4], FLOW_STEPS[5]);
+    flow.push(FLOW_STEPS[1], FLOW_STEPS[2], FLOW_STEPS[3], FLOW_STEPS[4]);
     const result = await controller.run(task);
 
     const context = createExecutionContext({
@@ -92,10 +99,19 @@ export class TaskRunner {
       logger: this.deps.logger,
     });
 
-    flow.push(FLOW_STEPS[6]);
-    const status = result.status;
-    const exitCode = result.exitCode;
-    const validatorNotes = [...result.validatorNotes];
+    const extended = await runExtendedValidation({
+      runId: result.runId,
+      artifactDir: result.artifactDir,
+      workspaceDir: context.workspaceDir,
+      businessStatus: result.status,
+      ...(this.deps.loadTest !== undefined ? { loadTest: this.deps.loadTest } : {}),
+      ...(this.deps.redTeam !== undefined ? { redTeam: this.deps.redTeam } : {}),
+    });
+    flow.push(FLOW_STEPS[5], FLOW_STEPS[6]);
+
+    const status = extended.blocksBusinessPass ? 'BLOCK' : result.status;
+    const exitCode = extended.blocksBusinessPass ? 1 : result.exitCode;
+    const validatorNotes = [...result.validatorNotes, extended.summary];
     const validationSteps = result.validationSteps;
     const validationChecks = result.validationChecks;
 
@@ -119,6 +135,7 @@ export class TaskRunner {
       },
       ...(this.deps.now !== undefined ? { now: this.deps.now } : {}),
     });
+    flow.push(FLOW_STEPS[7], FLOW_STEPS[8]);
 
     let workspaceCleaned = false;
     if (task.cleanupWorkspace) {
@@ -131,7 +148,7 @@ export class TaskRunner {
         );
       }
     }
-    flow.push(FLOW_STEPS[7]);
+    flow.push(FLOW_STEPS[9]);
 
     const report: ExecutionReport = {
       runId: result.runId,
@@ -145,7 +162,7 @@ export class TaskRunner {
       allowedTools: task.allowedTools,
       timeoutMs: task.timeoutMs,
       retryPolicy: task.retryPolicy,
-      flow: [...flow, FLOW_STEPS[8]],
+      flow: [...flow, FLOW_STEPS[10]],
       attempts: result.attempts,
       changedFiles: result.changedFiles,
       validationSteps,
@@ -158,7 +175,7 @@ export class TaskRunner {
     };
 
     writeExecutionReport(report);
-    flow.push(FLOW_STEPS[8]);
+    flow.push(FLOW_STEPS[10]);
 
     this.deps.logger.info('task execution finished', {
       status,

@@ -202,6 +202,7 @@ Expect recoverable: `PASS` after one repair. Unrecoverable: `BLOCK` with `repair
 - [RETRY_POLICY.md](./RETRY_POLICY.md) — classified retries, MAX_RETRIES=3, circuit break  
 - [EVIDENCE_PACKAGE.md](./EVIDENCE_PACKAGE.md) — runs/<id>/ layout and final-report.html  
 - [ROLLBACK.md](./ROLLBACK.md) — git checkpoint → preserve / restore  
+- [LOAD_AND_REDTEAM.md](./LOAD_AND_REDTEAM.md) — load/red-team interfaces (not formal acceptance)  
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — as-built control loop  
 - [CONFIGURATION.md](./CONFIGURATION.md) — full env reference  
 - [SAFETY.md](./SAFETY.md) — code-owned permissions, safe-stop, rollback  
